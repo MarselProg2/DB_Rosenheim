@@ -1,0 +1,52 @@
+[
+  {
+    "Ebene": "E1",
+    "EPos": "1",
+    "Kenngröße": "SalesPriceEUR"
+  },
+  {
+    "Ebene": "E1",
+    "EPos": "2",
+    "Kenngröße": "SalesAmount"
+  },
+  {
+    "Ebene": "E1",
+    "EPos": "3",
+    "Kenngröße": "UmsatzEUR"
+  },
+  {
+    "Ebene": "E1",
+    "EPos": "4",
+    "Kenngröße": "TransferPriceEUR"
+  },
+  {
+    "Ebene": "E2",
+    "EPos": "2",
+    "Kenngröße": "Commission in EUR"
+  },
+  {
+    "Ebene": "E3",
+    "EPos": "1",
+    "Kenngröße": "Additional Procurement Costs"
+  },
+  {
+    "Ebene": "E3",
+    "EPos": "1",
+    "Kenngröße": "Marketing Campaign"
+  },
+  {
+    "Ebene": "E3",
+    "EPos": "1",
+    "Kenngröße": "Monthly Rent"
+  },
+  {
+    "Ebene": "E3",
+    "EPos": "1",
+    "Kenngröße": "Monthly Salary"
+  },
+  {
+    "Ebene": "E3",
+    "EPos": "1",
+    "Kenngröße": "Monthly Social Costs"
+  }
+]
