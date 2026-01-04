@@ -307,7 +307,8 @@ def build_ebene_table(df_filtered: pd.DataFrame, ebene: str, df_map: pd.DataFram
         k_label = str(m['Kenngröße'])
         k_norm = str(m['_KenngroesseNorm'])
 
-        row_label = f"{epos}. {k_label}"
+        # Keine EPos-Nummern im Frontend anzeigen
+        row_label = f"{k_label}"
         row_order.append(row_label)
 
         tmp = (
