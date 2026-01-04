@@ -237,16 +237,28 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
 def load_kenngroessen_mapping() -> pd.DataFrame:
     """Lädt die Zuordnung Ebene/EPos/Kenngröße aus Kenngrößen.json (lokal im Projekt)."""
     # Streamlit kann __file__ relativ setzen; deshalb immer auf absoluten Pfad auflösen.
-    mapping_path = Path(__file__).resolve().with_name('Kenngrößen.json')
-    if not mapping_path.exists():
-        # Fallback: aktuelles Working Directory (falls Script von woanders gestartet wurde)
-        alt = Path.cwd() / 'Kenngrößen.json'
-        if alt.exists():
-            mapping_path = alt
-    if not mapping_path.exists():
+    script_path = Path(__file__).resolve()
+    candidates = [
+        script_path.with_name('Kenngrößen.json'),
+        Path.cwd().resolve() / 'Kenngrößen.json',
+        # Falls appV2.py in einem Unterordner (z.B. Fertig/) liegt, auch im Projekt-Root suchen
+        script_path.parent.parent / 'Kenngrößen.json',
+        Path.cwd().resolve().parent / 'Kenngrößen.json',
+    ]
+
+    mapping_path = next((p for p in candidates if p.exists()), None)
+    if mapping_path is None:
+        checked = []
+        seen = set()
+        for p in candidates:
+            ps = str(p)
+            if ps in seen:
+                continue
+            seen.add(ps)
+            checked.append(ps)
         raise FileNotFoundError(
-            "Kenngrößen.json nicht gefunden. Erwartet neben appV2.py oder im aktuellen Ordner. "
-            f"Geprüft: {Path(__file__).resolve().with_name('Kenngrößen.json')} und {Path.cwd() / 'Kenngrößen.json'}"
+            "Kenngrößen.json nicht gefunden. Bitte Datei in den Projektordner legen. "
+            "Geprüfte Pfade:\n- " + "\n- ".join(checked)
         )
     with mapping_path.open('r', encoding='utf-8') as f:
         raw = json.load(f)
@@ -389,7 +401,7 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
     return combined
 
 
-st.set_page_config(page_title="Final Table", layout="wide")
+st.set_page_config(page_title=" DB Rosenheim", layout="wide")
 st.title("Final Table – Kosten & Totals")
 
 with st.sidebar:
