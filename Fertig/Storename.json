@@ -1,0 +1,38 @@
+[
+  {
+    "DBEbene": "DB1",
+    "Kenngröße": "TransferPriceEUR"
+  },
+  {
+    "DBEbene": "DB1",
+    "Kenngröße": "UmsatzEUR"
+  },
+  {
+    "DBEbene": "DB2",
+    "Kenngröße": "DiscountAufMaterialEUR"
+  },
+  {
+    "DBEbene": "DB2",
+    "Kenngröße": "DiscountAufMaterialKategorieEUR"
+  },
+  {
+    "DBEbene": "DB3",
+    "Kenngröße": "Additional Procurement Costs"
+  },
+  {
+    "DBEbene": "DB3",
+    "Kenngröße": "Marketing Campaign"
+  },
+  {
+    "DBEbene": "DB3",
+    "Kenngröße": "Monthly Rent"
+  },
+  {
+    "DBEbene": "DB3",
+    "Kenngröße": "Monthly Salary"
+  },
+  {
+    "DBEbene": "DB3",
+    "Kenngröße": "Monthly Social Costs"
+  }
+]

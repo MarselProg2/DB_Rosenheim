@@ -1,3 +1,5 @@
+CREATE OR ALTER VIEW [list_views].[G14_Gesamt_DB_SCHEMA]
+AS
 WITH Base AS (
     SELECT DISTINCT
         [StoreName],
@@ -9,7 +11,6 @@ WITH Base AS (
         [ProduktLinie],
         [Wert]
     FROM [ERPDEV].[list_views].[V_LIST_LEHPE_MEASURES]
-    WHERE [StoreName] = 'Rosenheim'
 )
 ,Totals AS (
     SELECT
@@ -38,11 +39,9 @@ SELECT
 FROM Base B
 JOIN Totals T
     ON B.[StoreName] = T.[StoreName]
-    AND B.[Monat] = T.[Monat]
-ORDER BY
-    B.[Monat],
-    B.[Ebene],
-    B.[EPos],
-    B.[Kenngröße],
-    B.[ProduktKategorie],
-    B.[ProduktLinie];
+    AND B.[Monat] = T.[Monat];
+
+-- Beispiel:
+-- SELECT *
+-- FROM [list_views].[G14_Gesamt_DB_SCHEMA]
+-- ORDER BY Monat, Ebene, EPos, Kenngröße, ProduktKategorie, ProduktLinie;

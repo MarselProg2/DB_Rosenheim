@@ -1,7 +1,7 @@
 ./.venv/Scripts/streamlit run app.py
 
 
-python -m streamlit run appV2.py
+python -m streamlit run appV2_Final.py
 
 import streamlit as st
 import pandas as pd

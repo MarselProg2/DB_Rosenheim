@@ -2,8 +2,7 @@
 import streamlit as st
 import pandas as pd
 import pyodbc
-import json
-from pathlib import Path
+import re
 
 # -----------------------------------------------------------------------------
 # 1. KONFIGURATION & VERBINDUNG
@@ -16,6 +15,11 @@ DB_CONFIG = {
     "driver": "{SQL Server}"
 }
 
+
+def load_store_names() -> list[str]:
+    """Gibt nur die erlaubten Stores zurück: Rosenheim und Freiburg im Breisgau."""
+    return ['Rosenheim', 'Freiburg im Breisgau']
+
 @st.cache_data(ttl=600)
 def load_final_table_from_db(store_name: str):
     conn_str = (
@@ -24,60 +28,47 @@ def load_final_table_from_db(store_name: str):
     )
     conn = pyodbc.connect(conn_str)
 
-    # Query aus Final.sql (Base + Totals), aber mit Parameter statt festem Store.
-    query = """
-WITH Base AS (
-    SELECT DISTINCT
-        [StoreName],
-        [Monat],
-        [Ebene],
-        [EPos],
-        [Kenngröße],
-        [ProduktKategorie],
-        [ProduktLinie],
-        [Wert]
-    FROM [ERPDEV].[list_views].[V_LIST_LEHPE_MEASURES]
-    WHERE [StoreName] = ?
-)
-,Totals AS (
-    SELECT
-        B.[StoreName],
-        B.[Monat],
-        SUM(CASE WHEN B.[Ebene] = 'E1' THEN B.[Wert] ELSE 0 END) AS [E1_Total],
-        SUM(CASE WHEN B.[Ebene] = 'E2' THEN B.[Wert] ELSE 0 END) AS [E2_Total],
-        SUM(CASE WHEN B.[Ebene] = 'E3' THEN B.[Wert] ELSE 0 END) AS [E3_Total],
-        SUM(B.[Wert]) AS [Gesamt_Total]
-    FROM Base B
-    GROUP BY B.[StoreName], B.[Monat]
-)
-SELECT
-    B.[StoreName],
-    B.[Monat],
-    B.[Ebene],
-    B.[EPos],
-    B.[Kenngröße],
-    B.[ProduktKategorie],
-    B.[ProduktLinie],
-    B.[Wert],
-    T.[E1_Total],
-    T.[E2_Total],
-    T.[E3_Total],
-    T.[Gesamt_Total]
-FROM Base B
-JOIN Totals T
-    ON B.[StoreName] = T.[StoreName]
-    AND B.[Monat] = T.[Monat]
-ORDER BY
-    B.[Monat],
-    B.[Ebene],
-    B.[EPos],
-    B.[Kenngröße],
-    B.[ProduktKategorie],
-    B.[ProduktLinie];
-"""
+    store = (store_name or "").strip()
 
+    # Alle Stores (inkl. Freiburg im Breisgau, Rosenheim, etc.) aus derselben G14-View laden
+    g14_view = '[list_views].[G14_Gesamt_DB_SCHEMA]'
+
+    query = f"""
+SELECT *
+FROM {g14_view}
+WHERE [StoreName] = ?;
+"""
     df = pd.read_sql(query, conn, params=[store_name])
+
     conn.close()
+
+    # Manche Views liefern (DBEbene, Position) statt (Ebene, EPos).
+    # Damit die "DB Rechnung nach Ebenen" immer funktioniert, mappen wir robust – unabhängig vom Store.
+    if not df.empty:
+        if 'Ebene' not in df.columns and 'DBEbene' in df.columns:
+            ebene_map = {
+                'DB1': 'E1',
+                'DB2': 'E2',
+                'DB3': 'E3',
+            }
+            df['Ebene'] = (
+                df['DBEbene']
+                .astype(str)
+                .str.strip()
+                .map(ebene_map)
+                .fillna(df['DBEbene'].astype(str).str.strip())
+            )
+
+        if 'EPos' not in df.columns and 'Position' in df.columns:
+            df['EPos'] = df['Position']
+
+    if not df.empty:
+        sort_cols = [
+            c for c in ['Monat', 'Ebene', 'EPos', 'Kenngröße', 'ProduktKategorie', 'ProduktLinie']
+            if c in df.columns
+        ]
+        if sort_cols:
+            df = df.sort_values(sort_cols, kind='stable')
     return df
 
 
@@ -94,6 +85,7 @@ def add_time_columns(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out['Monat_dt'] = pd.to_datetime(out['Monat'])
     out['Jahr'] = out['Monat_dt'].dt.year
+    out['Quartal'] = 'Q' + out['Monat_dt'].dt.quarter.astype(str)
     return out
 
 
@@ -109,19 +101,16 @@ def calc_gesamtumsatz(df_filtered: pd.DataFrame) -> tuple[float, list[str]]:
     # Typische Namen aus LEHPE-Measures / Views
     candidates = {
         'umsatzeur',
+        'umsatz eur',
         'umsatz',
         'revenue',
         'sales',
+        'sales eur',
         'saleseur',
         'totalrevenue',
     }
 
-    k = (
-        df_filtered['Kenngröße']
-        .astype(str)
-        .str.strip()
-        .str.lower()
-    )
+    k = df_filtered['Kenngröße'].apply(normalize_kenngroesse)
     mask = k.isin(candidates)
 
     found = sorted(set(df_filtered.loc[mask, 'Kenngröße'].astype(str).unique().tolist()))
@@ -129,17 +118,56 @@ def calc_gesamtumsatz(df_filtered: pd.DataFrame) -> tuple[float, list[str]]:
     return umsatz, found
 
 
-def _pivot_for_kenngroesse(df_filtered: pd.DataFrame, kenngroesse_norm: str) -> pd.DataFrame:
-    """Erzeugt eine 1-Zeilen-Pivot-Tabelle (ProduktLinie/ProduktKategorie) für eine Kenngröße."""
+def normalize_kenngroesse(value) -> str:
+    """Normalisiert Kenngröße-Namen für robustes Matching.
+
+    Ziel: leichte Schreibvarianten (Whitespace, Punkte, € vs EUR, etc.) vereinheitlichen.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ''
+    s = str(value)
+    s = s.replace('\u00a0', ' ')
+    s = s.replace('€', ' eur ')
+    s = s.strip().lower()
+    # Trennzeichen vereinheitlichen
+    s = re.sub(r"[\t\r\n]+", " ", s)
+    s = re.sub(r"[._\-/]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def drop_allgemein_columns(pivot: pd.DataFrame) -> pd.DataFrame:
+    """Gibt die Pivot-Tabelle unverändert zurück.
+
+    Hinweis: Früher wurden 'Allgemein'-Spalten entfernt. Jetzt werden alle Spalten
+    (inkl. Allgemein) beibehalten, um keine Daten zu manipulieren.
+    """
+    return pivot
+
+
+def _pivot_for_kenngroesse(df_filtered: pd.DataFrame, kenngroesse_norm: str | list[str] | set[str] | tuple[str, ...]) -> pd.DataFrame:
+    """Erzeugt eine 1-Zeilen-Pivot-Tabelle (ProduktLinie/ProduktKategorie) für eine Kenngröße.
+
+    `kenngroesse_norm` kann ein String oder eine Liste von Kandidaten sein.
+    """
     needed = {'Kenngröße', 'ProduktLinie', 'ProduktKategorie', 'Wert'}
     if df_filtered.empty or not needed.issubset(df_filtered.columns):
         return pd.DataFrame()
 
-    tmp = df_filtered.copy()
-    tmp['Wert'] = pd.to_numeric(tmp['Wert'], errors='coerce').fillna(0)
-    tmp['_KenngroesseNorm'] = tmp['Kenngröße'].astype(str).str.strip().str.lower()
+    if isinstance(kenngroesse_norm, (list, set, tuple)):
+        targets = {normalize_kenngroesse(x) for x in kenngroesse_norm}
+    else:
+        targets = {normalize_kenngroesse(kenngroesse_norm)}
 
-    tmp = tmp[tmp['_KenngroesseNorm'] == kenngroesse_norm]
+    tmp = df_filtered.copy()
+    # Wichtig: In manchen Datenquellen (z.B. Freiburg) sind Linie/Kategorie NULL.
+    # Ohne Fallback würden diese Zeilen in groupby/pivot "verschwinden".
+    tmp['ProduktLinie'] = tmp['ProduktLinie'].fillna('Allgemein')
+    tmp['ProduktKategorie'] = tmp['ProduktKategorie'].fillna('Allgemein')
+    tmp['Wert'] = pd.to_numeric(tmp['Wert'], errors='coerce').fillna(0)
+    tmp['_KenngroesseNorm'] = tmp['Kenngröße'].apply(normalize_kenngroesse)
+
+    tmp = tmp[tmp['_KenngroesseNorm'].isin(targets)]
     if tmp.empty:
         return pd.DataFrame()
 
@@ -156,6 +184,7 @@ def _pivot_for_kenngroesse(df_filtered: pd.DataFrame, kenngroesse_norm: str) -> 
     )
     pivot.index = ['_row']
     pivot[('Summen', 'Gesamt')] = pivot.sum(axis=1)
+    pivot = drop_allgemein_columns(pivot)
     pivot = pivot.sort_index(axis=1)
     return pivot
 
@@ -167,9 +196,10 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     - E2 Total = E1 Total - Commission in EUR
     - E3 Total = E2 Total - Summe(E3 Kosten)
     """
-    umsatz = _pivot_for_kenngroesse(df_filtered, 'umsatzeur')
-    transfer = _pivot_for_kenngroesse(df_filtered, 'transferpriceeur')
-    commission = _pivot_for_kenngroesse(df_filtered, 'commission in eur')
+    umsatz = _pivot_for_kenngroesse(df_filtered, ['UmsatzEUR', 'Umsatz EUR', 'umsatzeur'])
+    transfer = _pivot_for_kenngroesse(df_filtered, ['TransferPriceEUR', 'Transfer Price EUR', 'transferpriceeur'])
+    # In manchen Quellen heißt das Feld nur "Commission" (ohne "in EUR").
+    commission = _pivot_for_kenngroesse(df_filtered, ['Commission in EUR', 'Commission', 'commission in eur', 'commission'])
 
     e3_cost_norms = [
         'additional procurement costs',
@@ -223,7 +253,7 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     if transfer.empty:
         missing.append('TransferPriceEUR')
     if commission.empty:
-        missing.append('Commission in EUR')
+        missing.append('Commission/Commission in EUR')
 
     return {
         'e1_total': e1_total,
@@ -233,53 +263,10 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     }
 
 
-@st.cache_data(ttl=600)
-def load_kenngroessen_mapping() -> pd.DataFrame:
-    """Lädt die Zuordnung Ebene/EPos/Kenngröße aus Kenngrößen.json (lokal im Projekt)."""
-    # Streamlit kann __file__ relativ setzen; deshalb immer auf absoluten Pfad auflösen.
-    script_path = Path(__file__).resolve()
-    candidates = [
-        script_path.with_name('Kenngrößen.json'),
-        Path.cwd().resolve() / 'Kenngrößen.json',
-        # Falls appV2.py in einem Unterordner (z.B. Fertig/) liegt, auch im Projekt-Root suchen
-        script_path.parent.parent / 'Kenngrößen.json',
-        Path.cwd().resolve().parent / 'Kenngrößen.json',
-    ]
+def build_ebene_table(df_filtered: pd.DataFrame, ebene: str) -> pd.DataFrame:
+    """Erstellt die Tabelle für eine Ebene basierend auf den geladenen Daten.
 
-    mapping_path = next((p for p in candidates if p.exists()), None)
-    if mapping_path is None:
-        checked = []
-        seen = set()
-        for p in candidates:
-            ps = str(p)
-            if ps in seen:
-                continue
-            seen.add(ps)
-            checked.append(ps)
-        raise FileNotFoundError(
-            "Kenngrößen.json nicht gefunden. Bitte Datei in den Projektordner legen. "
-            "Geprüfte Pfade:\n- " + "\n- ".join(checked)
-        )
-    with mapping_path.open('r', encoding='utf-8') as f:
-        raw = json.load(f)
-    df_map = pd.DataFrame(raw)
-    # Normalisieren für robustes Matching
-    for col in ['Ebene', 'EPos', 'Kenngröße']:
-        if col not in df_map.columns:
-            raise ValueError(f"Kenngrößen.json fehlt Spalte: {col}")
-    df_map['Ebene'] = df_map['Ebene'].astype(str).str.strip()
-    df_map['EPos'] = df_map['EPos'].astype(str).str.strip()
-    df_map['Kenngröße'] = df_map['Kenngröße'].astype(str).str.strip()
-    df_map['_KenngroesseNorm'] = df_map['Kenngröße'].str.lower()
-    df_map['_EPosNum'] = pd.to_numeric(df_map['EPos'], errors='coerce')
-    return df_map
-
-
-def build_ebene_table(df_filtered: pd.DataFrame, ebene: str, df_map: pd.DataFrame) -> pd.DataFrame:
-    """Erstellt die Tabelle für eine Ebene basierend auf Kenngrößen.json.
-
-    Pro Mapping-Eintrag (Ebene/EPos/Kenngröße) wird genau eine Zeile erzeugt.
-    Am Ende kommt '<Ebene> Total'.
+    Reihenfolge: nach EPos (numerisch), dann Kenngröße. Am Ende kommt '<Ebene> Total'.
     """
     needed = {'Ebene', 'EPos', 'Kenngröße', 'ProduktLinie', 'ProduktKategorie', 'Wert'}
     if df_filtered.empty or not needed.issubset(df_filtered.columns):
@@ -289,33 +276,30 @@ def build_ebene_table(df_filtered: pd.DataFrame, ebene: str, df_map: pd.DataFram
     if df_e.empty:
         return pd.DataFrame()
 
+    # Fallback für NULL Linie/Kategorie, damit die Werte in der Pivot landen.
+    df_e['ProduktLinie'] = df_e['ProduktLinie'].fillna('Allgemein')
+    df_e['ProduktKategorie'] = df_e['ProduktKategorie'].fillna('Allgemein')
+
     df_e['Wert'] = pd.to_numeric(df_e['Wert'], errors='coerce').fillna(0)
 
     df_e['_KenngroesseNorm'] = df_e['Kenngröße'].astype(str).str.strip().str.lower()
 
-    # Kenngrößen ausblenden (z.B. nicht-monetäre/technische Kennzahlen)
-    excluded = {'salespriceeur', 'salesamount', 'salesprice', 'sales amount', 'sales price'}
-    df_e = df_e[~df_e['_KenngroesseNorm'].isin(excluded)].copy()
-    if df_e.empty:
-        return pd.DataFrame()
-
-    df_map_e = df_map[df_map['Ebene'] == str(ebene)].copy()
-    if df_map_e.empty:
-        return pd.DataFrame()
-
-    # Gleiche Kenngrößen auch aus dem Mapping entfernen, damit keine leeren Zeilen entstehen
-    df_map_e = df_map_e[~df_map_e['_KenngroesseNorm'].isin(excluded)].copy()
-    if df_map_e.empty:
-        return pd.DataFrame()
-
-    # Sortierung: EPos numerisch, dann in JSON-Reihenfolge (df_map_e ist bereits in Datei-Reihenfolge)
-    df_map_e = df_map_e.sort_values(['_EPosNum'], kind='stable')
+    # Hinweis: Früher wurden nicht-monetäre/technische Kennzahlen (z.B. SalesPrice/SalesAmount)
+    # ausgeblendet. Für Freiburg führt das aber dazu, dass gefühlt „alles fehlt“, weil dort
+    # genau diese Kenngrößen häufig vorkommen. Daher hier bewusst keine Ausblendung.
 
     rows = []
     row_order: list[str] = []
 
-    for _, m in df_map_e.iterrows():
-        epos = str(m['EPos'])
+    df_rows = (
+        df_e[['EPos', 'Kenngröße', '_KenngroesseNorm']]
+        .drop_duplicates()
+        .copy()
+    )
+    df_rows['_EPosNum'] = pd.to_numeric(df_rows['EPos'], errors='coerce')
+    df_rows = df_rows.sort_values(['_EPosNum', 'Kenngröße'], kind='stable')
+
+    for _, m in df_rows.iterrows():
         k_label = str(m['Kenngröße'])
         k_norm = str(m['_KenngroesseNorm'])
 
@@ -351,6 +335,7 @@ def build_ebene_table(df_filtered: pd.DataFrame, ebene: str, df_map: pd.DataFram
     )
 
     pivot[('Summen', 'Gesamt')] = pivot.sum(axis=1)
+    pivot = drop_allgemein_columns(pivot)
     pivot = pivot.sort_index(axis=1)
 
     # Reihenfolge erzwingen
@@ -362,9 +347,8 @@ def build_ebene_table(df_filtered: pd.DataFrame, ebene: str, df_map: pd.DataFram
 def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.DataFrame:
     """Kombiniert E1..E3 zu einer einzigen Tabelle (Zeilen untereinander)."""
     parts: list[pd.DataFrame] = []
-    df_map = load_kenngroessen_mapping()
     for ebene in ebenen:
-        part = build_ebene_table(df_filtered, ebene, df_map)
+        part = build_ebene_table(df_filtered, ebene)
         if not part.empty:
             # Prefix, damit die Zeilen eindeutig sind (z.B. "E1 | 1. UmsatzEUR")
             part = part.copy()
@@ -380,6 +364,7 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
         all_cols = all_cols.union(p.columns)
     parts = [p.reindex(columns=all_cols) for p in parts]
     combined = pd.concat(parts, axis=0)
+    combined = combined.fillna(0)
 
     # DB-Logik: Total-Zeilen spaltenweise berechnen
     db = compute_deckungsbeitraege(df_filtered)
@@ -398,17 +383,24 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
         if e3_idx in combined.index:
             combined.loc[e3_idx] = db['e3_total'].reindex(columns=combined.columns).iloc[0].fillna(0).values
 
+    combined = combined.fillna(0)
+
     return combined
 
 
-st.set_page_config(page_title=" DB Rosenheim", layout="wide")
+st.set_page_config(page_title=" APPV211DB Rosenheim", layout="wide")
 st.title("Final Table – Kosten & Totals")
 
 with st.sidebar:
     st.header("Filter")
-    store_name = st.text_input("StoreName", value="Rosenheim")
+    store_options = load_store_names()
+    default_index = 0
+    if 'Rosenheim' in store_options:
+        default_index = store_options.index('Rosenheim')
+    store_name = st.selectbox("StoreName", store_options, index=default_index)
     if st.button("🔄 Daten aktualisieren"):
         load_final_table_from_db.clear()
+        load_store_names.clear()
         st.rerun()
 
 
@@ -419,10 +411,11 @@ try:
         st.warning("Keine Daten geladen. Bitte StoreName/Verbindung prüfen.")
         st.stop()
 
+    # Minimal benötigte Spalten für Filter + Kennzahlen.
+    # Ebenen-Auswertung ist optional und wird nur gezeigt, wenn Ebene/EPos vorhanden sind.
     required_cols = {
-        'StoreName', 'Monat', 'Ebene', 'EPos', 'Kenngröße',
-        'ProduktKategorie', 'ProduktLinie', 'Wert',
-        'E1_Total', 'E2_Total', 'E3_Total', 'Gesamt_Total'
+        'StoreName', 'Monat', 'Kenngröße',
+        'ProduktKategorie', 'ProduktLinie', 'Wert'
     }
     missing_cols = sorted(required_cols.difference(df_raw.columns))
     if missing_cols:
@@ -440,10 +433,25 @@ try:
         selected_jahr = st.selectbox("Jahr", jahre)
 
         df_jahr = df[df['Jahr'] == selected_jahr]
-        monat_options = ['Alle'] + sorted(df_jahr['Monat'].unique().tolist())
+        present_quarters = sorted(df_jahr['Monat_dt'].dt.quarter.dropna().unique().tolist())
+        quartal_options = ['Alle'] + [f"Q{q}" for q in present_quarters]
+        selected_quartal = st.selectbox("Quartal", quartal_options)
+
+        df_scope = df_jahr
+        if selected_quartal != 'Alle':
+            df_scope = df_scope[df_scope['Quartal'] == selected_quartal]
+
+        month_map = (
+            df_scope[['Monat', 'Monat_dt']]
+            .drop_duplicates()
+            .sort_values('Monat_dt', kind='stable')
+        )
+        monat_options = ['Alle'] + month_map['Monat'].astype(str).tolist()
         selected_monat = st.selectbox("Monat", monat_options)
 
     df_filtered = df[df['Jahr'] == selected_jahr].copy()
+    if selected_quartal != 'Alle':
+        df_filtered = df_filtered[df_filtered['Quartal'] == selected_quartal]
     if selected_monat != 'Alle':
         df_filtered = df_filtered[df_filtered['Monat'] == selected_monat]
 
@@ -453,6 +461,8 @@ try:
 
     if selected_monat != 'Alle':
         zeitraum_titel = f"{selected_monat}"
+    elif selected_quartal != 'Alle':
+        zeitraum_titel = f"{selected_quartal} {selected_jahr}"
     else:
         zeitraum_titel = f"Gesamtjahr {selected_jahr}"
 
@@ -494,9 +504,10 @@ try:
     st.subheader("DB Rechnung nach Ebenen")
 
     def format_german(val):
-        if pd.isna(val) or val == 0:
+        if pd.isna(val):
             return "-"
-        return "{:,.2f} €".format(val).replace(",", "X").replace(".", ",").replace("X", ".")
+        # 0 soll sichtbar sein (sonst wirkt die Tabelle "leer")
+        return "{:,.2f} €".format(float(val)).replace(",", "X").replace(".", ",").replace("X", ".")
 
     def style_total_rows(row):
         idx = str(row.name)
@@ -504,29 +515,28 @@ try:
             return ['background-color: #f2f2f2; font-weight: bold; border-top: 1px solid #aaa; color: black;'] * len(row)
         return [''] * len(row)
 
-    present_ebenen = [e for e in ['E1', 'E2', 'E3'] if e in set(df_filtered['Ebene'].dropna().astype(str))]
-    if not present_ebenen:
-        st.info("Keine Ebenen (E1/E2/E3) in den Daten gefunden.")
+    if 'Ebene' not in df_filtered.columns or 'EPos' not in df_filtered.columns:
+        st.info("Hinweis: Ebenen-Auswertung (E1/E2/E3) ist für diese Datenquelle nicht verfügbar (Spalten Ebene/EPos fehlen).")
     else:
-        df_all = build_all_ebenen_table(df_filtered, present_ebenen)
-        if df_all.empty:
-            st.info("Keine Detailanalyse-Daten für Ebenen.")
+        present_ebenen = [e for e in ['E1', 'E2', 'E3'] if e in set(df_filtered['Ebene'].dropna().astype(str))]
+        if not present_ebenen:
+            st.info("Keine Ebenen (E1/E2/E3) in den Daten gefunden.")
         else:
-            st.dataframe(
-                df_all.style
-                .format(format_german)
-                .apply(style_total_rows, axis=1),
-                use_container_width=True,
-                height=520
-            )
+            df_all = build_all_ebenen_table(df_filtered, present_ebenen)
+            if df_all.empty:
+                st.info("Keine Detailanalyse-Daten für Ebenen.")
+            else:
+                st.dataframe(
+                    df_all.style
+                    .format(format_german)
+                    .apply(style_total_rows, axis=1),
+                    use_container_width=True,
+                    height=520
+                )
 
     st.markdown("---")
 
     with st.expander("Legende: Kenngrößen"):
-        df_map = load_kenngroessen_mapping()
-
-        excluded = {'salespriceeur', 'salesamount', 'salesprice', 'sales amount', 'sales price'}
-
         # Kurze, neutrale Beschreibungen (bei Unklarheit bewusst vorsichtig formuliert)
         descriptions = {
             'SalesPriceEUR': 'Verkaufspreis in EUR (Sales Price).',
@@ -541,12 +551,10 @@ try:
             'Monthly Social Costs': 'Monatliche Sozialkosten.',
         }
 
-        # Einmalig auflisten (in Datei-Reihenfolge), nur Name + Beschreibung
+        # Einmalig auflisten (Reihenfolge wie in den Daten), nur Name + Beschreibung
+        k_series = df_filtered['Kenngröße'].dropna().astype(str).str.strip()
         seen = set()
-        for _, r in df_map.iterrows():
-            name = str(r['Kenngröße']).strip()
-            if name.lower() in excluded:
-                continue
+        for name in k_series.tolist():
             if name in seen:
                 continue
             seen.add(name)
