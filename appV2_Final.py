@@ -1,7 +1,7 @@
 
 import streamlit as st
 import pandas as pd
-import pyodbc
+import pymssql
 import re
 
 # -----------------------------------------------------------------------------
@@ -12,7 +12,6 @@ DB_CONFIG = {
     "database": "ERPDEV",
     "user": "w25s252",
     "password": "202860",
-    "driver": "{SQL Server}"
 }
 
 
@@ -22,11 +21,12 @@ def load_store_names() -> list[str]:
 
 @st.cache_data(ttl=600)
 def load_final_table_from_db(store_name: str):
-    conn_str = (
-        f"DRIVER={DB_CONFIG['driver']};SERVER={DB_CONFIG['server']};"
-        f"DATABASE={DB_CONFIG['database']};UID={DB_CONFIG['user']};PWD={DB_CONFIG['password']};"
+    conn = pymssql.connect(
+        server=DB_CONFIG['server'],
+        database=DB_CONFIG['database'],
+        user=DB_CONFIG['user'],
+        password=DB_CONFIG['password'],
     )
-    conn = pyodbc.connect(conn_str)
 
     store = (store_name or "").strip()
 
@@ -36,7 +36,7 @@ def load_final_table_from_db(store_name: str):
     query = f"""
 SELECT *
 FROM {g14_view}
-WHERE [StoreName] = ?;
+WHERE [StoreName] = %s;
 """
     df = pd.read_sql(query, conn, params=[store_name])
 
