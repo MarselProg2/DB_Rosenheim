@@ -14,10 +14,106 @@ DB_CONFIG = {
     "password": "202860",
 }
 
+# -----------------------------------------------------------------------------
+# 2. BENUTZER & BERECHTIGUNGEN
+# -----------------------------------------------------------------------------
+# Berechtigungsstufen: 1 = niedrigste, 3 = höchste
+USERS = {
+    "fachk1": {"password": "fachk1", "level": 1, "name": "Fachkraft Stufe 1"},
+    "fachk2": {"password": "fachk2", "level": 2, "name": "Fachkraft Stufe 2"},
+    "fachk3": {"password": "fachk3", "level": 3, "name": "Fachkraft Stufe 3"},
+}
+
+# Berechtigungen pro Stufe
+# Level 1: Nur Rosenheim, nur Jahresansicht
+# Level 2: Rosenheim + Freiburg, Quartalsansicht
+# Level 3: Alle Stores, alle Filter (Monat, Quartal, Jahr)
+PERMISSIONS = {
+    1: {
+        "stores": ["Rosenheim"],
+        "can_filter_quartal": False,
+        "can_filter_monat": False,
+        "description": "Zugriff auf Rosenheim (nur Jahresansicht)",
+    },
+    2: {
+        "stores": ["Rosenheim", "Freiburg im Breisgau"],
+        "can_filter_quartal": True,
+        "can_filter_monat": False,
+        "description": "Zugriff auf alle Stores (Jahr + Quartal)",
+    },
+    3: {
+        "stores": ["Rosenheim", "Freiburg im Breisgau"],
+        "can_filter_quartal": True,
+        "can_filter_monat": True,
+        "description": "Voller Zugriff (alle Filter)",
+    },
+}
+
+
+def check_login(username: str, password: str) -> bool:
+    """Prüft Login-Daten und setzt Session-State."""
+    if username in USERS and USERS[username]["password"] == password:
+        st.session_state["logged_in"] = True
+        st.session_state["username"] = username
+        st.session_state["user_level"] = USERS[username]["level"]
+        st.session_state["user_name"] = USERS[username]["name"]
+        return True
+    return False
+
+
+def logout():
+    """Logout und Session zurücksetzen."""
+    st.session_state["logged_in"] = False
+    st.session_state["username"] = None
+    st.session_state["user_level"] = None
+    st.session_state["user_name"] = None
+
+
+def get_user_permissions() -> dict:
+    """Gibt die Berechtigungen des aktuellen Users zurück."""
+    level = st.session_state.get("user_level", 1)
+    return PERMISSIONS.get(level, PERMISSIONS[1])
+
+
+def show_login_page():
+    """Zeigt die Login-Seite an."""
+    st.set_page_config(page_title="Login – DB Rechnung", layout="centered")
+    st.title("🔐 Login")
+    st.markdown("Bitte melden Sie sich an, um fortzufahren.")
+    
+    with st.form("login_form"):
+        username = st.text_input("Benutzername")
+        password = st.text_input("Passwort", type="password")
+        submit = st.form_submit_button("Anmelden")
+        
+        if submit:
+            if check_login(username, password):
+                st.success(f"Willkommen, {st.session_state['user_name']}!")
+                st.rerun()
+            else:
+                st.error("Ungültiger Benutzername oder Passwort.")
+    
+    st.markdown("---")
+    st.caption("Testbenutzer: fachk1, fachk2, fachk3 (Passwort = Benutzername)")
+
+
+# -----------------------------------------------------------------------------
+# 3. LOGIN-PRÜFUNG
+# -----------------------------------------------------------------------------
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    show_login_page()
+    st.stop()
+
+# Ab hier: User ist eingeloggt
+permissions = get_user_permissions()
+
 
 def load_store_names() -> list[str]:
-    """Gibt nur die erlaubten Stores zurück: Rosenheim und Freiburg im Breisgau."""
-    return ['Rosenheim', 'Freiburg im Breisgau']
+    """Gibt die erlaubten Stores basierend auf Berechtigungsstufe zurück."""
+    return permissions["stores"]
 
 @st.cache_data(ttl=600)
 def load_final_table_from_db(store_name: str):
@@ -388,19 +484,28 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
     return combined
 
 
-st.set_page_config(page_title=" APPV211DB Rosenheim", layout="wide")
+st.set_page_config(page_title="DB Rechnung", layout="wide")
 st.title("Final Table – Kosten & Totals")
 
 with st.sidebar:
+    # User-Info und Logout
+    st.markdown(f"**Angemeldet als:** {st.session_state['user_name']}")
+    st.caption(f"Berechtigung: {permissions['description']}")
+    if st.button("🚪 Abmelden"):
+        logout()
+        st.rerun()
+    
+    st.markdown("---")
     st.header("Filter")
+    
     store_options = load_store_names()
     default_index = 0
     if 'Rosenheim' in store_options:
         default_index = store_options.index('Rosenheim')
     store_name = st.selectbox("StoreName", store_options, index=default_index)
+    
     if st.button("🔄 Daten aktualisieren"):
         load_final_table_from_db.clear()
-        load_store_names.clear()
         st.rerun()
 
 
@@ -433,29 +538,49 @@ try:
         selected_jahr = st.selectbox("Jahr", jahre)
 
         df_jahr = df[df['Jahr'] == selected_jahr]
-        present_quarters = sorted(df_jahr['Monat_dt'].dt.quarter.dropna().unique().tolist())
-        quartal_options = ['Alle'] + [f"Q{q}" for q in present_quarters]
-        selected_quartal = st.selectbox("Quartal", quartal_options)
+        
+        # Quartal-Filter nur für Level 2+
+        selected_quartal = 'Alle'
+        if permissions["can_filter_quartal"]:
+            present_quarters = sorted(df_jahr['Monat_dt'].dt.quarter.dropna().unique().tolist())
+            quartal_options = ['Alle'] + [f"Q{q}" for q in present_quarters]
+            selected_quartal = st.selectbox("Quartal", quartal_options)
+        else:
+            st.caption("🔒 Quartalsfilter nicht verfügbar (Berechtigung)")
 
         df_scope = df_jahr
         if selected_quartal != 'Alle':
             df_scope = df_scope[df_scope['Quartal'] == selected_quartal]
 
-        month_map = (
-            df_scope[['Monat', 'Monat_dt']]
-            .drop_duplicates()
-            .sort_values('Monat_dt', kind='stable')
-        )
-        monat_options = ['Alle'] + month_map['Monat'].astype(str).tolist()
-        selected_monat = st.selectbox("Monat", monat_options)
+        # Monat-Filter nur für Level 3
+        selected_monat = 'Alle'
+        if permissions["can_filter_monat"]:
+            month_map = (
+                df_scope[['Monat', 'Monat_dt']]
+                .drop_duplicates()
+                .sort_values('Monat_dt', kind='stable')
+            )
+            monat_options = ['Alle'] + month_map['Monat'].astype(str).tolist()
+            selected_monat = st.selectbox("Monat", monat_options)
+        else:
+            st.caption("🔒 Monatsfilter nicht verfügbar (Berechtigung)")
 
     df_filtered = df[df['Jahr'] == selected_jahr].copy()
     if selected_quartal != 'Alle':
         df_filtered = df_filtered[df_filtered['Quartal'] == selected_quartal]
     if selected_monat != 'Alle':
-        df_filtered = df_filtered[df_filtered['Monat'] == selected_monat]
+        # Robuster Vergleich: beide Seiten als String
+        df_filtered = df_filtered[df_filtered['Monat'].astype(str) == str(selected_monat)]
 
+    # Debug: Falls leer, zeige verfügbare Werte
     if df_filtered.empty:
+        with st.expander("🔍 Debug: Verfügbare Daten", expanded=True):
+            st.write(f"Ausgewähltes Jahr: {selected_jahr}")
+            st.write(f"Ausgewähltes Quartal: {selected_quartal}")
+            st.write(f"Ausgewählter Monat: {selected_monat} (Typ: {type(selected_monat).__name__})")
+            st.write(f"Verfügbare Jahre: {sorted(df['Jahr'].unique().tolist())}")
+            st.write(f"Verfügbare Monate im Jahr {selected_jahr}: {df[df['Jahr'] == selected_jahr]['Monat'].unique().tolist()}")
+            st.write(f"Monat-Spalte Typ: {df['Monat'].dtype}")
         st.info("Für den ausgewählten Zeitraum gibt es keine Daten.")
         st.stop()
 
