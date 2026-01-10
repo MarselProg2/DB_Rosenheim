@@ -304,17 +304,50 @@ def _pivot_for_kenngroesse(df_filtered: pd.DataFrame, kenngroesse_norm: str | li
     return pivot
 
 
+# Erwartete Kenngrößen pro Ebene (für Validierung)
+EXPECTED_KENNGROESSEN = {
+    'E1': ['UmsatzEUR', 'TransferPriceEUR'],
+    'E2': ['Commission in EUR', 'DiscountAufMaterialEUR', 'DiscountAufMaterialKategorieEUR'],
+    'E3': ['Additional Procurement Costs', 'Marketing Campaign', 'Monthly Rent', 'Monthly Salary', 'Monthly Social Costs'],
+}
+
+
+def get_missing_kenngroessen(df_filtered: pd.DataFrame) -> dict:
+    """Prüft welche erwarteten Kenngrößen in den Daten fehlen."""
+    if 'Kenngröße' not in df_filtered.columns:
+        return {ebene: kenn_list for ebene, kenn_list in EXPECTED_KENNGROESSEN.items()}
+    
+    # Vorhandene Kenngrößen normalisieren
+    vorhandene = set(df_filtered['Kenngröße'].dropna().astype(str).str.strip().str.lower())
+    
+    missing_per_ebene = {}
+    for ebene, expected in EXPECTED_KENNGROESSEN.items():
+        missing = []
+        for k in expected:
+            if k.lower() not in vorhandene:
+                missing.append(k)
+        if missing:
+            missing_per_ebene[ebene] = missing
+    
+    return missing_per_ebene
+
+
 def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     """Berechnet DB-Logik spaltenweise (nicht zeilenweise).
 
     - E1 Total = UmsatzEUR + TransferPriceEUR
-    - E2 Total = E1 Total - Commission in EUR
+    - E2 Total = E1 Total - (Commission + Discounts)
     - E3 Total = E2 Total - Summe(E3 Kosten)
+    
+    Hinweis: Wenn E2-Kenngrößen (Commission, Discounts) fehlen, wird E2 = E1 gesetzt.
     """
     umsatz = _pivot_for_kenngroesse(df_filtered, ['UmsatzEUR', 'Umsatz EUR', 'umsatzeur'])
     transfer = _pivot_for_kenngroesse(df_filtered, ['TransferPriceEUR', 'Transfer Price EUR', 'transferpriceeur'])
-    # In manchen Quellen heißt das Feld nur "Commission" (ohne "in EUR").
+    
+    # E2-Kenngrößen: Commission und Discounts
     commission = _pivot_for_kenngroesse(df_filtered, ['Commission in EUR', 'Commission', 'commission in eur', 'commission'])
+    discount_material = _pivot_for_kenngroesse(df_filtered, ['DiscountAufMaterialEUR', 'discountaufmaterialeur'])
+    discount_kategorie = _pivot_for_kenngroesse(df_filtered, ['DiscountAufMaterialKategorieEUR', 'discountaufmaterialkategorieeur'])
 
     e3_cost_norms = [
         'additional procurement costs',
@@ -332,7 +365,7 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
 
     # Gemeinsame Spaltenbasis
     all_cols = pd.Index([])
-    for p in [umsatz, transfer, commission] + e3_cost_parts:
+    for p in [umsatz, transfer, commission, discount_material, discount_kategorie] + e3_cost_parts:
         if not p.empty:
             all_cols = all_cols.union(p.columns)
     if len(all_cols) == 0:
@@ -340,12 +373,14 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
             'e1_total': pd.DataFrame(),
             'e2_total': pd.DataFrame(),
             'e3_total': pd.DataFrame(),
-            'missing': ['umsatzeur', 'transferpriceeur', 'commission in eur']
+            'missing_per_ebene': get_missing_kenngroessen(df_filtered),
         }
 
     umsatz_a = _align(umsatz, all_cols)
     transfer_a = _align(transfer, all_cols)
     commission_a = _align(commission, all_cols)
+    discount_material_a = _align(discount_material, all_cols)
+    discount_kategorie_a = _align(discount_kategorie, all_cols)
 
     e3_cost_a = pd.DataFrame(index=['_row'], columns=all_cols).fillna(0)
     for p in e3_cost_parts:
@@ -354,7 +389,11 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     # TransferPriceEUR ist in vielen Datenquellen bereits als negativer Wert hinterlegt.
     # Daher hier bewusst PLUS, um kein "Minus minus" zu erzeugen.
     e1_total = umsatz_a.add(transfer_a, fill_value=0)
-    e2_total = e1_total.sub(commission_a, fill_value=0)
+    
+    # E2: E1 minus alle E2-Abzüge (Commission + Discounts)
+    e2_abzuege = commission_a.add(discount_material_a, fill_value=0).add(discount_kategorie_a, fill_value=0)
+    e2_total = e1_total.sub(e2_abzuege, fill_value=0)
+    
     e3_total = e2_total.sub(e3_cost_a, fill_value=0)
 
     # Summen-Spalte sicherstellen (falls in all_cols nicht enthalten)
@@ -362,19 +401,11 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
         for df_ in (e1_total, e2_total, e3_total):
             df_[('Summen', 'Gesamt')] = df_.sum(axis=1)
 
-    missing = []
-    if umsatz.empty:
-        missing.append('UmsatzEUR')
-    if transfer.empty:
-        missing.append('TransferPriceEUR')
-    if commission.empty:
-        missing.append('Commission/Commission in EUR')
-
     return {
         'e1_total': e1_total,
         'e2_total': e2_total,
         'e3_total': e3_total,
-        'missing': missing,
+        'missing_per_ebene': get_missing_kenngroessen(df_filtered),
     }
 
 
@@ -462,8 +493,16 @@ def build_ebene_table(df_filtered: pd.DataFrame, ebene: str) -> pd.DataFrame:
 
 
 def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.DataFrame:
-    """Kombiniert E1..E3 zu einer einzigen Tabelle (Zeilen untereinander)."""
+    """Kombiniert E1..E3 zu einer einzigen Tabelle (Zeilen untereinander).
+    
+    E2 wird auch angezeigt, wenn keine E2-Daten in der Quelle existieren,
+    aber berechnet werden kann (E2 Total = E1 Total - E2-Abzüge).
+    """
     parts: list[pd.DataFrame] = []
+    
+    # DB-Logik vorab berechnen
+    db = compute_deckungsbeitraege(df_filtered)
+    
     for ebene in ebenen:
         part = build_ebene_table(df_filtered, ebene)
         if not part.empty:
@@ -471,6 +510,13 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
             part = part.copy()
             part.index = [f"{ebene} | {idx}" for idx in part.index]
             parts.append(part)
+    
+    # E2 hinzufügen, falls nicht in den Daten vorhanden aber berechenbar
+    if 'E2' not in ebenen and not db['e2_total'].empty:
+        # E2 Total-Zeile erstellen
+        e2_total_row = db['e2_total'].copy()
+        e2_total_row.index = ['E2 | E2 Total']
+        parts.append(e2_total_row)
 
     if not parts:
         return pd.DataFrame()
@@ -483,8 +529,7 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
     combined = pd.concat(parts, axis=0)
     combined = combined.fillna(0)
 
-    # DB-Logik: Total-Zeilen spaltenweise berechnen
-    db = compute_deckungsbeitraege(df_filtered)
+    # Total-Zeilen mit berechneten Werten überschreiben
     if not db['e1_total'].empty:
         e1_idx = 'E1 | E1 Total'
         if e1_idx in combined.index:
@@ -501,6 +546,18 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
             combined.loc[e3_idx] = db['e3_total'].reindex(columns=combined.columns).iloc[0].fillna(0).values
 
     combined = combined.fillna(0)
+    
+    # Sortierung: E1, E2, E3 in richtiger Reihenfolge
+    def sort_key(idx):
+        if idx.startswith('E1'):
+            return (1, idx)
+        elif idx.startswith('E2'):
+            return (2, idx)
+        elif idx.startswith('E3'):
+            return (3, idx)
+        return (9, idx)
+    
+    combined = combined.loc[sorted(combined.index, key=sort_key)]
 
     return combined
 
@@ -620,11 +677,13 @@ try:
     if not db['e3_total'].empty and ('Summen', 'Gesamt') in db['e3_total'].columns:
         sum_total = float(db['e3_total'].iloc[0][('Summen', 'Gesamt')])
 
-    if db.get('missing'):
-        st.info(
-            "Hinweis: Für die Deckungsbeitrags-Rechnung fehlen Kenngrößen: "
-            + ", ".join(db['missing'])
-        )
+    # Hinweis über fehlende Kenngrößen pro Ebene
+    missing_per_ebene = db.get('missing_per_ebene', {})
+    if missing_per_ebene:
+        missing_text = "**Hinweis: Folgende Kenngrößen fehlen in den Daten:**\n"
+        for ebene, missing_list in missing_per_ebene.items():
+            missing_text += f"- **{ebene}**: {', '.join(missing_list)}\n"
+        st.warning(missing_text)
 
     profitabel = sum_total > 0
     status_text = "✅ Profitabel" if profitabel else "❌ Nicht profitabel"
@@ -688,6 +747,8 @@ try:
             'UmsatzEUR': 'Umsatz in EUR.',
             'TransferPriceEUR': 'Transferpreis / Einkaufspreis in EUR.',
             'Commission in EUR': 'Provision / Commission in EUR.',
+            'DiscountAufMaterialEUR': 'Rabatt auf Material in EUR.',
+            'DiscountAufMaterialKategorieEUR': 'Rabatt auf Materialkategorie in EUR.',
             'Additional Procurement Costs': 'Zusätzliche Beschaffungskosten.',
             'Marketing Campaign': 'Marketing-Kampagne (Kosten).',
             'Monthly Rent': 'Monatsmiete.',

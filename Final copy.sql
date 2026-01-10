@@ -50,5 +50,5 @@ GO
 -- Beispiel:
 SELECT *
 FROM [list_views].[G14_Gesamt_DB_SCHEMA]
-WHERE StoreName = 'Freiburg im Breisgau' AND Kenngröße='SalesPric'
+
 ORDER BY Monat, Ebene, TRY_CONVERT(int, EPos), EPos, Kenngröße, ProduktKategorie, ProduktLinie;
