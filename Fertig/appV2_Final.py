@@ -14,125 +14,10 @@ DB_CONFIG = {
     "password": "202860",
 }
 
-# -----------------------------------------------------------------------------
-# 2. BENUTZER & BERECHTIGUNGEN
-# -----------------------------------------------------------------------------
-# Berechtigungen pro Stufe (SECURITYLEVEL aus DB)
-# Level 1: Nur Rosenheim, nur Jahresansicht
-# Level 2: Rosenheim + Freiburg, Quartalsansicht
-# Level 3: Alle Stores, alle Filter (Monat, Quartal, Jahr)
-PERMISSIONS = {
-    1: {
-        "stores": ["Rosenheim"],
-        "can_filter_quartal": False,
-        "can_filter_monat": False,
-        "description": "Zugriff auf Rosenheim (nur Jahresansicht)",
-    },
-    2: {
-        "stores": ["Rosenheim", "Freiburg im Breisgau"],
-        "can_filter_quartal": True,
-        "can_filter_monat": False,
-        "description": "Zugriff auf alle Stores (Jahr + Quartal)",
-    },
-    3: {
-        "stores": ["Rosenheim", "Freiburg im Breisgau"],
-        "can_filter_quartal": True,
-        "can_filter_monat": True,
-        "description": "Voller Zugriff (alle Filter)",
-    },
-}
-
-
-def check_login(username: str, password: str) -> bool:
-    """Prüft Login-Daten gegen die Datenbank-Tabelle LOV_USER_LOGINS."""
-    try:
-        conn = pymssql.connect(
-            server=DB_CONFIG['server'],
-            database=DB_CONFIG['database'],
-            user=DB_CONFIG['user'],
-            password=DB_CONFIG['password'],
-        )
-        cursor = conn.cursor(as_dict=True)
-        
-        # Benutzer in der Datenbank suchen
-        query = """
-            SELECT [USERNAME], [USERPASS], [SECURITYLEVEL]
-            FROM [dbo].[LOV_USER_LOGINS]
-            WHERE [USERNAME] = %s AND [USERPASS] = %s
-        """
-        cursor.execute(query, (username, password))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            # SECURITYLEVEL auf 1-3 begrenzen (falls andere Werte in DB)
-            level = int(row['SECURITYLEVEL']) if row['SECURITYLEVEL'] else 1
-            level = max(1, min(3, level))  # Zwischen 1 und 3 halten
-            
-            st.session_state["logged_in"] = True
-            st.session_state["username"] = row['USERNAME']
-            st.session_state["user_level"] = level
-            st.session_state["user_name"] = f"Fachkraft Stufe {level}"
-            return True
-        return False
-    except Exception as e:
-        st.error(f"Datenbankfehler beim Login: {e}")
-        return False
-
-
-def logout():
-    """Logout und Session zurücksetzen."""
-    st.session_state["logged_in"] = False
-    st.session_state["username"] = None
-    st.session_state["user_level"] = None
-    st.session_state["user_name"] = None
-
-
-def get_user_permissions() -> dict:
-    """Gibt die Berechtigungen des aktuellen Users zurück."""
-    level = st.session_state.get("user_level", 1)
-    return PERMISSIONS.get(level, PERMISSIONS[1])
-
-
-def show_login_page():
-    """Zeigt die Login-Seite an."""
-    st.set_page_config(page_title="Login – DB Rechnung", layout="centered")
-    st.title("🔐 Login")
-    st.markdown("Bitte melden Sie sich an, um fortzufahren.")
-    
-    with st.form("login_form"):
-        username = st.text_input("Benutzername")
-        password = st.text_input("Passwort", type="password")
-        submit = st.form_submit_button("Anmelden")
-        
-        if submit:
-            if check_login(username, password):
-                st.success(f"Willkommen, {st.session_state['user_name']}!")
-                st.rerun()
-            else:
-                st.error("Ungültiger Benutzername oder Passwort.")
-    
-    st.markdown("---")
-    st.caption("Login mit Benutzerdaten aus der Datenbank")
-
-
-# -----------------------------------------------------------------------------
-# 3. LOGIN-PRÜFUNG
-# -----------------------------------------------------------------------------
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-
-if not st.session_state["logged_in"]:
-    show_login_page()
-    st.stop()
-
-# Ab hier: User ist eingeloggt
-permissions = get_user_permissions()
-
 
 def load_store_names() -> list[str]:
-    """Gibt die erlaubten Stores basierend auf Berechtigungsstufe zurück."""
-    return permissions["stores"]
+    """Gibt nur die erlaubten Stores zurück: Rosenheim und Freiburg im Breisgau."""
+    return ['Rosenheim', 'Freiburg im Breisgau']
 
 @st.cache_data(ttl=600)
 def load_final_table_from_db(store_name: str):
@@ -399,11 +284,9 @@ def build_ebene_table(df_filtered: pd.DataFrame, ebene: str) -> pd.DataFrame:
 
     df_e['_KenngroesseNorm'] = df_e['Kenngröße'].astype(str).str.strip().str.lower()
 
-    # SalesPrice und SalesAmount ausblenden (nicht-monetäre/technische Kennzahlen)
-    exclude_patterns = {'salesprice', 'salespriceeur', 'salesamount'}
-    df_e = df_e[~df_e['_KenngroesseNorm'].isin(exclude_patterns)]
-    if df_e.empty:
-        return pd.DataFrame()
+    # Hinweis: Früher wurden nicht-monetäre/technische Kennzahlen (z.B. SalesPrice/SalesAmount)
+    # ausgeblendet. Für Freiburg führt das aber dazu, dass gefühlt „alles fehlt“, weil dort
+    # genau diese Kenngrößen häufig vorkommen. Daher hier bewusst keine Ausblendung.
 
     rows = []
     row_order: list[str] = []
@@ -505,28 +388,19 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
     return combined
 
 
-st.set_page_config(page_title="DB Rechnung", layout="wide")
+st.set_page_config(page_title=" APPV211DB Rosenheim", layout="wide")
 st.title("Final Table – Kosten & Totals")
 
 with st.sidebar:
-    # User-Info und Logout
-    st.markdown(f"**Angemeldet als:** {st.session_state['user_name']}")
-    st.caption(f"Berechtigung: {permissions['description']}")
-    if st.button("🚪 Abmelden"):
-        logout()
-        st.rerun()
-    
-    st.markdown("---")
     st.header("Filter")
-    
     store_options = load_store_names()
     default_index = 0
     if 'Rosenheim' in store_options:
         default_index = store_options.index('Rosenheim')
     store_name = st.selectbox("StoreName", store_options, index=default_index)
-    
     if st.button("🔄 Daten aktualisieren"):
         load_final_table_from_db.clear()
+        load_store_names.clear()
         st.rerun()
 
 
@@ -559,49 +433,29 @@ try:
         selected_jahr = st.selectbox("Jahr", jahre)
 
         df_jahr = df[df['Jahr'] == selected_jahr]
-        
-        # Quartal-Filter nur für Level 2+
-        selected_quartal = 'Alle'
-        if permissions["can_filter_quartal"]:
-            present_quarters = sorted(df_jahr['Monat_dt'].dt.quarter.dropna().unique().tolist())
-            quartal_options = ['Alle'] + [f"Q{q}" for q in present_quarters]
-            selected_quartal = st.selectbox("Quartal", quartal_options)
-        else:
-            st.caption("🔒 Quartalsfilter nicht verfügbar (Berechtigung)")
+        present_quarters = sorted(df_jahr['Monat_dt'].dt.quarter.dropna().unique().tolist())
+        quartal_options = ['Alle'] + [f"Q{q}" for q in present_quarters]
+        selected_quartal = st.selectbox("Quartal", quartal_options)
 
         df_scope = df_jahr
         if selected_quartal != 'Alle':
             df_scope = df_scope[df_scope['Quartal'] == selected_quartal]
 
-        # Monat-Filter nur für Level 3
-        selected_monat = 'Alle'
-        if permissions["can_filter_monat"]:
-            month_map = (
-                df_scope[['Monat', 'Monat_dt']]
-                .drop_duplicates()
-                .sort_values('Monat_dt', kind='stable')
-            )
-            monat_options = ['Alle'] + month_map['Monat'].astype(str).tolist()
-            selected_monat = st.selectbox("Monat", monat_options)
-        else:
-            st.caption("🔒 Monatsfilter nicht verfügbar (Berechtigung)")
+        month_map = (
+            df_scope[['Monat', 'Monat_dt']]
+            .drop_duplicates()
+            .sort_values('Monat_dt', kind='stable')
+        )
+        monat_options = ['Alle'] + month_map['Monat'].astype(str).tolist()
+        selected_monat = st.selectbox("Monat", monat_options)
 
     df_filtered = df[df['Jahr'] == selected_jahr].copy()
     if selected_quartal != 'Alle':
         df_filtered = df_filtered[df_filtered['Quartal'] == selected_quartal]
     if selected_monat != 'Alle':
-        # Robuster Vergleich: beide Seiten als String
-        df_filtered = df_filtered[df_filtered['Monat'].astype(str) == str(selected_monat)]
+        df_filtered = df_filtered[df_filtered['Monat'] == selected_monat]
 
-    # Debug: Falls leer, zeige verfügbare Werte
     if df_filtered.empty:
-        with st.expander("🔍 Debug: Verfügbare Daten", expanded=True):
-            st.write(f"Ausgewähltes Jahr: {selected_jahr}")
-            st.write(f"Ausgewähltes Quartal: {selected_quartal}")
-            st.write(f"Ausgewählter Monat: {selected_monat} (Typ: {type(selected_monat).__name__})")
-            st.write(f"Verfügbare Jahre: {sorted(df['Jahr'].unique().tolist())}")
-            st.write(f"Verfügbare Monate im Jahr {selected_jahr}: {df[df['Jahr'] == selected_jahr]['Monat'].unique().tolist()}")
-            st.write(f"Monat-Spalte Typ: {df['Monat'].dtype}")
         st.info("Für den ausgewählten Zeitraum gibt es keine Daten.")
         st.stop()
 
@@ -685,6 +539,8 @@ try:
     with st.expander("Legende: Kenngrößen"):
         # Kurze, neutrale Beschreibungen (bei Unklarheit bewusst vorsichtig formuliert)
         descriptions = {
+            'SalesPriceEUR': 'Verkaufspreis in EUR (Sales Price).',
+            'SalesAmount': 'Verkaufsmenge / Anzahl (Sales Amount).',
             'UmsatzEUR': 'Umsatz in EUR.',
             'TransferPriceEUR': 'Transferpreis / Einkaufspreis in EUR.',
             'Commission in EUR': 'Provision / Commission in EUR.',
