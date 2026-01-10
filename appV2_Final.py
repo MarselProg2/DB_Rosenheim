@@ -639,7 +639,7 @@ try:
 
     c0, c1, c2 = st.columns(3)
     c0.metric("Gesamtumsatz", format_eur(gesamtumsatz))
-    c1.metric("Summe Gesamt", format_eur(sum_total))
+    c1.metric("E3 Total Summe", format_eur(sum_total))
     c2.metric("Status", status_text)
 
     st.markdown("---")
