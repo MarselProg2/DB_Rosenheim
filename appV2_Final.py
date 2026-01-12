@@ -10,8 +10,8 @@ import re
 DB_CONFIG = {
     "server": "edu.hdm-server.eu",
     "database": "ERPDEV",
-    "user": "ERP_REMOTE_USER",
-    "password": "Password123"
+    "user": "w25s252",
+    "password": "202860"
 }
 
 # -----------------------------------------------------------------------------
