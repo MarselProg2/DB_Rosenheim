@@ -4,13 +4,15 @@ import pandas as pd
 import pymssql
 import re
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 # -----------------------------------------------------------------------------
 # 1. KONFIGURATION & VERBINDUNG
 # -----------------------------------------------------------------------------
-# Lade Umgebungsvariablen aus .env-Datei
-load_dotenv()
+# Lade Umgebungsvariablen aus .env-Datei (expliziter Pfad)
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 DB_CONFIG = {
     "server": os.getenv("DB_SERVER"),
