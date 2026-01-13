@@ -11,7 +11,9 @@ from dotenv import load_dotenv
 # 1. KONFIGURATION & VERBINDUNG
 # -----------------------------------------------------------------------------
 
-load_dotenv()
+# Expliziter Pfad zur .env-Datei (wichtig für Streamlit)
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 DB_CONFIG = {
     "server": os.getenv("DB_SERVER"),
