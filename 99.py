@@ -1,23 +1,14 @@
 
 import streamlit as st
 import pandas as pd
-import pymssql
 import re
-import os
-from dotenv import load_dotenv
+
 
 # -----------------------------------------------------------------------------
-# 1. KONFIGURATION & VERBINDUNG
+# 1. MOCKDATEN-MODUS FÜR SCREENSHOTS
 # -----------------------------------------------------------------------------
-# Lade Umgebungsvariablen aus .env-Datei
-load_dotenv()
+# Keine Datenbankverbindung nötig - alle Daten werden generiert
 
-DB_CONFIG = {
-    "server": os.getenv("DB_SERVER"),
-    "database": os.getenv("DB_DATABASE"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD")
-}
 
 # -----------------------------------------------------------------------------
 # 2. BENUTZER & BERECHTIGUNGEN
@@ -48,41 +39,27 @@ PERMISSIONS = {
 }
 
 
+# =============================================================================
+# MOCKDATEN FÜR SCREENSHOTS (keine echte DB-Verbindung nötig)
+# =============================================================================
+MOCK_USERS = {
+    "admin": {"password": "admin", "level": 3},
+    "manager": {"password": "manager", "level": 2},
+    "user": {"password": "user", "level": 1},
+}
+
+
 def check_login(username: str, password: str) -> bool:
-    """Prüft Login-Daten gegen die Datenbank-Tabelle LOV_USER_LOGINS."""
-    try:
-        conn = pymssql.connect(
-            server=DB_CONFIG['server'],
-            database=DB_CONFIG['database'],
-            user=DB_CONFIG['user'],
-            password=DB_CONFIG['password'],
-        )
-        cursor = conn.cursor(as_dict=True)
-        
-        # Benutzer in der Datenbank suchen
-        query = """
-            SELECT [USERNAME], [USERPASS], [SECURITYLEVEL]
-            FROM [dbo].[LOV_USER_LOGINS]
-            WHERE [USERNAME] = %s AND [USERPASS] = %s
-        """
-        cursor.execute(query, (username, password))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            # SECURITYLEVEL auf 1-3 begrenzen (falls andere Werte in DB)
-            level = int(row['SECURITYLEVEL']) if row['SECURITYLEVEL'] else 1
-            level = max(1, min(3, level))  # Zwischen 1 und 3 halten
-            
-            st.session_state["logged_in"] = True
-            st.session_state["username"] = row['USERNAME']
-            st.session_state["user_level"] = level
-            st.session_state["user_name"] = f"Fachkraft Stufe {level}"
-            return True
-        return False
-    except Exception as e:
-        st.error(f"Datenbankfehler beim Login: {e}")
-        return False
+    """Prüft Login-Daten gegen Mockdaten (für Screenshots)."""
+    user = MOCK_USERS.get(username.lower())
+    if user and user["password"] == password:
+        level = user["level"]
+        st.session_state["logged_in"] = True
+        st.session_state["username"] = username
+        st.session_state["user_level"] = level
+        st.session_state["user_name"] = f"Fachkraft Stufe {level}"
+        return True
+    return False
 
 
 def logout():
@@ -139,56 +116,107 @@ def load_store_names() -> list[str]:
     """Gibt die erlaubten Stores basierend auf Berechtigungsstufe zurück."""
     return permissions["stores"]
 
+
 @st.cache_data(ttl=600)
 def load_final_table_from_db(store_name: str):
-    conn = pymssql.connect(
-        server=DB_CONFIG['server'],
-        database=DB_CONFIG['database'],
-        user=DB_CONFIG['user'],
-        password=DB_CONFIG['password'],
-    )
-
-    store = (store_name or "").strip()
-
-    # Alle Stores (inkl. Freiburg im Breisgau, Rosenheim, etc.) aus derselben G14-View laden
-    g14_view = '[list_views].[G14_Gesamt_DB_SCHEMA]'
-
-    query = f"""
-SELECT *
-FROM {g14_view}
-WHERE [StoreName] = %s;
-"""
-    df = pd.read_sql(query, conn, params=[store_name])
-
-    conn.close()
-
-    # Manche Views liefern (DBEbene, Position) statt (Ebene, EPos).
-    # Damit die "DB Rechnung nach Ebenen" immer funktioniert, mappen wir robust – unabhängig vom Store.
-    if not df.empty:
-        if 'Ebene' not in df.columns and 'DBEbene' in df.columns:
-            ebene_map = {
-                'DB1': 'E1',
-                'DB2': 'E2',
-                'DB3': 'E3',
-            }
-            df['Ebene'] = (
-                df['DBEbene']
-                .astype(str)
-                .str.strip()
-                .map(ebene_map)
-                .fillna(df['DBEbene'].astype(str).str.strip())
-            )
-
-        if 'EPos' not in df.columns and 'Position' in df.columns:
-            df['EPos'] = df['Position']
-
-    if not df.empty:
-        sort_cols = [
-            c for c in ['Monat', 'Ebene', 'EPos', 'Kenngröße', 'ProduktKategorie', 'ProduktLinie']
-            if c in df.columns
-        ]
-        if sort_cols:
-            df = df.sort_values(sort_cols, kind='stable')
+    """Generiert Mockdaten für Screenshots."""
+    import numpy as np
+    
+    # Realistische Mockdaten erstellen
+    monate = pd.date_range("2025-01-01", "2025-12-01", freq="MS").strftime("%Y-%m-%d").tolist()
+    
+    produktlinien = ["Fahrräder", "E-Bikes", "Zubehör"]
+    produktkategorien = {
+        "Fahrräder": ["Mountainbike", "Rennrad", "Citybike"],
+        "E-Bikes": ["E-Mountainbike", "E-Trekking", "E-City"],
+        "Zubehör": ["Helme", "Schlösser", "Beleuchtung"],
+    }
+    
+    kenngroessen_e1 = [
+        ("E1", 1, "UmsatzEUR"),
+        ("E1", 2, "TransferPriceEUR"),
+    ]
+    kenngroessen_e2 = [
+        ("E2", 1, "Commission in EUR"),
+        ("E2", 2, "DiscountAufMaterialEUR"),
+        ("E2", 3, "DiscountAufMaterialKategorieEUR"),
+    ]
+    kenngroessen_e3 = [
+        ("E3", 1, "Additional Procurement Costs"),
+        ("E3", 2, "Marketing Campaign"),
+        ("E3", 3, "Monthly Rent"),
+        ("E3", 4, "Monthly Salary"),
+        ("E3", 5, "Monthly Social Costs"),
+    ]
+    
+    rows = []
+    np.random.seed(42)  # Reproduzierbare Daten
+    
+    for monat in monate:
+        for linie in produktlinien:
+            for kategorie in produktkategorien[linie]:
+                # E1 Kenngrößen (Umsatz & Transferpreis)
+                for ebene, pos, kenngr in kenngroessen_e1:
+                    if kenngr == "UmsatzEUR":
+                        wert = np.random.uniform(15000, 45000)
+                    else:  # TransferPriceEUR (negativ)
+                        wert = -np.random.uniform(8000, 25000)
+                    
+                    rows.append({
+                        "StoreName": store_name,
+                        "Monat": monat,
+                        "Ebene": ebene,
+                        "EPos": pos,
+                        "Kenngröße": kenngr,
+                        "ProduktLinie": linie,
+                        "ProduktKategorie": kategorie,
+                        "Wert": round(wert, 2),
+                    })
+                
+                # E2 Kenngrößen (Provisionen, Rabatte)
+                for ebene, pos, kenngr in kenngroessen_e2:
+                    wert = np.random.uniform(200, 1500)
+                    rows.append({
+                        "StoreName": store_name,
+                        "Monat": monat,
+                        "Ebene": ebene,
+                        "EPos": pos,
+                        "Kenngröße": kenngr,
+                        "ProduktLinie": linie,
+                        "ProduktKategorie": kategorie,
+                        "Wert": round(wert, 2),
+                    })
+        
+        # E3 Kenngrößen (Fixkosten - nur einmal pro Monat, ohne Produktzuordnung)
+        for ebene, pos, kenngr in kenngroessen_e3:
+            if kenngr == "Monthly Rent":
+                wert = 3500.0
+            elif kenngr == "Monthly Salary":
+                wert = 12500.0
+            elif kenngr == "Monthly Social Costs":
+                wert = 2800.0
+            elif kenngr == "Marketing Campaign":
+                wert = np.random.uniform(1500, 4000)
+            else:  # Additional Procurement Costs
+                wert = np.random.uniform(800, 2000)
+            
+            rows.append({
+                "StoreName": store_name,
+                "Monat": monat,
+                "Ebene": ebene,
+                "EPos": pos,
+                "Kenngröße": kenngr,
+                "ProduktLinie": None,
+                "ProduktKategorie": None,
+                "Wert": round(wert, 2),
+            })
+    
+    df = pd.DataFrame(rows)
+    
+    # Sortieren wie echte Daten
+    sort_cols = ['Monat', 'Ebene', 'EPos', 'Kenngröße', 'ProduktKategorie', 'ProduktLinie']
+    df = df.sort_values([c for c in sort_cols if c in df.columns], kind='stable')
+    
     return df
 
 
@@ -257,12 +285,26 @@ def normalize_kenngroesse(value) -> str:
 
 
 def drop_allgemein_columns(pivot: pd.DataFrame) -> pd.DataFrame:
-    """Gibt die Pivot-Tabelle unverändert zurück.
-
-    Hinweis: Früher wurden 'Allgemein'-Spalten entfernt. Jetzt werden alle Spalten
-    (inkl. Allgemein) beibehalten, um keine Daten zu manipulieren.
-    """
-    return pivot
+    """Entfernt alle Spalten, die 'Allgemein' oder 'Zubehör' enthalten."""
+    if pivot.empty:
+        return pivot
+    
+    # Begriffe, die aus den Spalten entfernt werden sollen
+    exclude_terms = ['Allgemein', 'Zubehör']
+    
+    # Bei MultiIndex-Spalten prüfen, ob ein Ausschluss-Begriff in einem der Levels vorkommt
+    cols_to_keep = []
+    for col in pivot.columns:
+        if isinstance(col, tuple):
+            # MultiIndex: Prüfe alle Ebenen
+            if not any(term in str(c) for c in col for term in exclude_terms):
+                cols_to_keep.append(col)
+        else:
+            # Einfacher Index
+            if not any(term in str(col) for term in exclude_terms):
+                cols_to_keep.append(col)
+    
+    return pivot[cols_to_keep]
 
 
 def _pivot_for_kenngroesse(df_filtered: pd.DataFrame, kenngroesse_norm: str | list[str] | set[str] | tuple[str, ...]) -> pd.DataFrame:
@@ -552,15 +594,22 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
 
     combined = combined.fillna(0)
     
-    # Sortierung: E1, E2, E3 in richtiger Reihenfolge
+    # Sortierung: E1, E2, E3 in richtiger Reihenfolge, Total-Zeilen am Ende jeder Ebene
     def sort_key(idx):
+        # Ebene extrahieren (E1, E2, E3)
         if idx.startswith('E1'):
-            return (1, idx)
+            ebene = 1
         elif idx.startswith('E2'):
-            return (2, idx)
+            ebene = 2
         elif idx.startswith('E3'):
-            return (3, idx)
-        return (9, idx)
+            ebene = 3
+        else:
+            ebene = 9
+        
+        # Total-Zeilen ans Ende der jeweiligen Ebene
+        is_total = 1 if 'Total' in idx else 0
+        
+        return (ebene, is_total, idx)
     
     combined = combined.loc[sorted(combined.index, key=sort_key)]
 
