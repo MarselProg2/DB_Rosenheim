@@ -3,20 +3,15 @@ import streamlit as st
 import pandas as pd
 import pymssql
 import re
-import os
-from dotenv import load_dotenv
 
 # -----------------------------------------------------------------------------
 # 1. KONFIGURATION & VERBINDUNG
 # -----------------------------------------------------------------------------
-# Lade Umgebungsvariablen aus .env-Datei
-load_dotenv()
-
 DB_CONFIG = {
-    "server": os.getenv("DB_SERVER"),
-    "database": os.getenv("DB_DATABASE"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD")
+    "server": "edu.hdm-server.eu",
+    "database": "ERPDEV",
+    "user": "ERP_REMOTE_USER",
+    "password": "Password123"
 }
 
 # -----------------------------------------------------------------------------
