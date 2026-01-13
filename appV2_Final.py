@@ -3,15 +3,20 @@ import streamlit as st
 import pandas as pd
 import pymssql
 import re
+import os
+from dotenv import load_dotenv
 
 # -----------------------------------------------------------------------------
 # 1. KONFIGURATION & VERBINDUNG
 # -----------------------------------------------------------------------------
+# Lade Umgebungsvariablen aus .env-Datei
+load_dotenv()
+
 DB_CONFIG = {
-    "server": "edu.hdm-server.eu",
-    "database": "ERPDEV",
-    "user": "ERP_REMOTE_USER",
-    "password": "Password123"
+    "server": os.getenv("DB_SERVER"),
+    "database": os.getenv("DB_DATABASE"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD")
 }
 
 # -----------------------------------------------------------------------------
@@ -548,14 +553,55 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
     combined = combined.fillna(0)
     
     # Sortierung: E1, E2, E3 in richtiger Reihenfolge
+    # E1 Total direkt nach UmsatzEUR (Position 1.5)
+    # E2 Total direkt nach den E2-Kenngrößen, vor E3
+    # E3 Total am Ende
     def sort_key(idx):
+        # Ebene extrahieren
         if idx.startswith('E1'):
-            return (1, idx)
+            ebene = 1
         elif idx.startswith('E2'):
-            return (2, idx)
+            ebene = 2
         elif idx.startswith('E3'):
-            return (3, idx)
-        return (9, idx)
+            ebene = 3
+        else:
+            ebene = 9
+        
+        # Spezielle Positionen für Total-Zeilen
+        if 'E1 Total' in idx:
+            # E1 Total direkt nach UmsatzEUR (Position 1, 1.5)
+            return (1, 1.5, idx)
+        elif 'E2 Total' in idx:
+            # E2 Total am Ende von E2, vor E3 (Position 2, 99)
+            return (2, 99, idx)
+        elif 'E3 Total' in idx:
+            # E3 Total am Ende
+            return (3, 99, idx)
+        else:
+            # Normale Zeilen nach Position sortieren
+            # UmsatzEUR = Position 1, TransferPriceEUR = Position 2, etc.
+            if 'UmsatzEUR' in idx:
+                return (ebene, 1, idx)
+            elif 'TransferPriceEUR' in idx:
+                return (ebene, 2, idx)
+            elif 'Commission' in idx:
+                return (ebene, 1, idx)
+            elif 'DiscountAufMaterial' in idx and 'Kategorie' not in idx:
+                return (ebene, 2, idx)
+            elif 'DiscountAufMaterialKategorie' in idx:
+                return (ebene, 3, idx)
+            elif 'Additional Procurement' in idx:
+                return (ebene, 1, idx)
+            elif 'Marketing Campaign' in idx:
+                return (ebene, 2, idx)
+            elif 'Monthly Rent' in idx:
+                return (ebene, 3, idx)
+            elif 'Monthly Salary' in idx:
+                return (ebene, 4, idx)
+            elif 'Monthly Social' in idx:
+                return (ebene, 5, idx)
+            else:
+                return (ebene, 50, idx)
     
     combined = combined.loc[sorted(combined.index, key=sort_key)]
 
