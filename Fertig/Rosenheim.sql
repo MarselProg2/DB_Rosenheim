@@ -41,7 +41,7 @@ JOIN Totals T
     ON B.[StoreName] = T.[StoreName]
     AND B.[Monat] = T.[Monat];
 
--- Beispiel:
--- SELECT *
--- FROM [list_views].[G14_Gesamt_DB_SCHEMA]
--- ORDER BY Monat, Ebene, EPos, Kenngröße, ProduktKategorie, ProduktLinie;
+GO
+SELECT *
+FROM [list_views].[G14_Gesamt_DB_SCHEMA]
+ORDER BY Monat, Ebene, EPos, Kenngröße, ProduktKategorie, ProduktLinie;

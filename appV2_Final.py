@@ -10,9 +10,9 @@ from dotenv import load_dotenv
 # 1. KONFIGURATION & VERBINDUNG
 # -----------------------------------------------------------------------------
 
-# Expliziter Pfad zur .env-Datei (wichtig für Streamlit)
-env_path = Path(__file__).parent / ".env"
-load_dotenv(dotenv_path=env_path)
+# # Expliziter Pfad zur .env-Datei (wichtig für Streamlit)
+# env_path = Path(__file__).parent / ".env"
+# load_dotenv(dotenv_path=env_path)
 
 DB_CONFIG = {
     "server": "edu.hdm-server.eu",
@@ -21,6 +21,9 @@ DB_CONFIG = {
     "password": "202860",
     "driver": "{SQL Server}"
 }
+
+# Zentrale View für alle Stores (Rosenheim, Freiburg, Heidelberg, ...)
+G14_VIEW = '[list_views].[G14_Gesamt_DB_SCHEMA]'
 
 # -----------------------------------------------------------------------------
 # 2. BENUTZER & BERECHTIGUNGEN
@@ -40,13 +43,14 @@ PERMISSIONS = {
         "stores": ["Rosenheim", "Freiburg im Breisgau"],
         "can_filter_quartal": True,
         "can_filter_monat": False,
-        "description": "Zugriff auf alle Stores (Jahr + Quartal)",
+        "description": "Zugriff auf Rosenheim & Freiburg (Jahr + Quartal)",
     },
     3: {
-        "stores": ["Rosenheim", "Freiburg im Breisgau"],
+        # '*' bedeutet: alle Stores aus der Datenquelle anzeigen
+        "stores": ["*"],
         "can_filter_quartal": True,
         "can_filter_monat": True,
-        "description": "Voller Zugriff (alle Filter)",
+        "description": "Voller Zugriff (alle Stores, alle Filter)",
     },
 }
 
@@ -139,8 +143,48 @@ permissions = get_user_permissions()
 
 
 def load_store_names() -> list[str]:
-    """Gibt die erlaubten Stores basierend auf Berechtigungsstufe zurück."""
-    return permissions["stores"]
+    """Gibt die erlaubten Stores basierend auf Berechtigungsstufe zurück.
+
+    - Level 1/2: feste Liste aus PERMISSIONS
+    - Level 3: alle Stores werden dynamisch aus der DB geladen
+    """
+    allowed = permissions.get("stores", [])
+    if isinstance(allowed, (list, tuple, set)) and any(str(x).strip() == "*" for x in allowed):
+        return load_all_store_names_from_db()
+    return list(allowed)
+
+
+@st.cache_data(ttl=600)
+def load_all_store_names_from_db() -> list[str]:
+    """Lädt alle verfügbaren StoreNames aus der G14-View."""
+    conn = pymssql.connect(
+        server=DB_CONFIG['server'],
+        database=DB_CONFIG['database'],
+        user=DB_CONFIG['user'],
+        password=DB_CONFIG['password'],
+    )
+
+    query = f"""
+SELECT DISTINCT [StoreName]
+FROM {G14_VIEW}
+WHERE [StoreName] IS NOT NULL
+ORDER BY [StoreName];
+"""
+    df = pd.read_sql(query, conn)
+    conn.close()
+
+    if df.empty or 'StoreName' not in df.columns:
+        return []
+
+    stores = (
+        df['StoreName']
+        .astype(str)
+        .map(lambda x: x.strip())
+        .tolist()
+    )
+    # Leere Strings rausfiltern
+    stores = [s for s in stores if s]
+    return stores
 
 @st.cache_data(ttl=600)
 def load_final_table_from_db(store_name: str):
@@ -153,12 +197,9 @@ def load_final_table_from_db(store_name: str):
 
     store = (store_name or "").strip()
 
-    # Alle Stores (inkl. Freiburg im Breisgau, Rosenheim, etc.) aus derselben G14-View laden
-    g14_view = '[list_views].[G14_Gesamt_DB_SCHEMA]'
-
     query = f"""
 SELECT *
-FROM {g14_view}
+FROM {G14_VIEW}
 WHERE [StoreName] = %s;
 """
     df = pd.read_sql(query, conn, params=[store_name])
