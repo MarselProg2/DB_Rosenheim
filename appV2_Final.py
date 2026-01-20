@@ -15,10 +15,11 @@ env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 DB_CONFIG = {
-    "server": os.getenv("DB_SERVER"),
-    "database": os.getenv("DB_DATABASE"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD")
+    "server": "edu.hdm-server.eu",
+    "database": "ERPDEV",
+    "user": "w25s252",
+    "password": "202860",
+    "driver": "{SQL Server}"
 }
 
 # -----------------------------------------------------------------------------
