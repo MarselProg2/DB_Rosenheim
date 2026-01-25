@@ -356,8 +356,8 @@ def _pivot_for_kenngroesse(df_filtered: pd.DataFrame, kenngroesse_norm: str | li
 # Erwartete Kenngrößen pro Ebene (für Validierung)
 EXPECTED_KENNGROESSEN = {
     'E1': ['UmsatzEUR', 'TransferPriceEUR'],
-    'E2': ['Commission in EUR', 'DiscountAufMaterialEUR', 'DiscountAufMaterialKategorieEUR'],
-    'E3': ['Additional Procurement Costs', 'Marketing Campaign', 'Monthly Rent', 'Monthly Salary', 'Monthly Social Costs'],
+    'E2': ['DiscountAufMaterialEUR', 'DiscountAufMaterialKategorieEUR'],
+    'E3': ['Commission in EUR', 'Additional Procurement Costs', 'Marketing Campaign', 'Monthly Rent', 'Monthly Salary', 'Monthly Social Costs'],
 }
 
 
@@ -385,15 +385,15 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     """Berechnet DB-Logik spaltenweise (nicht zeilenweise).
 
     - E1 Total = UmsatzEUR + TransferPriceEUR
-    - E2 Total = E1 Total - (Commission + Discounts)
-    - E3 Total = E2 Total - Summe(E3 Kosten)
+    - E2 Total = E1 Total - (Discounts)
+    - E3 Total = E2 Total - (Commission + Summe(E3 Kosten))
     
     Hinweis: Wenn E2-Kenngrößen (Commission, Discounts) fehlen, wird E2 = E1 gesetzt.
     """
     umsatz = _pivot_for_kenngroesse(df_filtered, ['UmsatzEUR', 'Umsatz EUR', 'umsatzeur'])
     transfer = _pivot_for_kenngroesse(df_filtered, ['TransferPriceEUR', 'Transfer Price EUR', 'transferpriceeur'])
     
-    # E2-Kenngrößen: Commission und Discounts
+    # Kenngrößen
     commission = _pivot_for_kenngroesse(df_filtered, ['Commission in EUR', 'Commission', 'commission in eur', 'commission'])
     discount_material = _pivot_for_kenngroesse(df_filtered, ['DiscountAufMaterialEUR', 'discountaufmaterialeur'])
     discount_kategorie = _pivot_for_kenngroesse(df_filtered, ['DiscountAufMaterialKategorieEUR', 'discountaufmaterialkategorieeur'])
@@ -405,7 +405,9 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
         'monthly salary',
         'monthly social costs',
     ]
-    e3_cost_parts = [p for p in (_pivot_for_kenngroesse(df_filtered, k) for k in e3_cost_norms) if not p.empty]
+    e3_cost_parts = [p for p in [commission] + [
+        _pivot_for_kenngroesse(df_filtered, k) for k in e3_cost_norms
+    ] if not p.empty]
 
     def _align(p: pd.DataFrame, cols: pd.Index) -> pd.DataFrame:
         if p.empty:
@@ -439,8 +441,8 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     # Daher hier bewusst PLUS, um kein "Minus minus" zu erzeugen.
     e1_total = umsatz_a.add(transfer_a, fill_value=0)
     
-    # E2: E1 minus alle E2-Abzüge (Commission + Discounts)
-    e2_abzuege = commission_a.add(discount_material_a, fill_value=0).add(discount_kategorie_a, fill_value=0)
+    # E2: E1 minus Discounts (Commission wird in E3 abgezogen)
+    e2_abzuege = discount_material_a.add(discount_kategorie_a, fill_value=0)
     e2_total = e1_total.sub(e2_abzuege, fill_value=0)
     
     e3_total = e2_total.sub(e3_cost_a, fill_value=0)
