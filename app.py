@@ -361,19 +361,22 @@ EXPECTED_KENNGROESSEN = {
 }
 
 
+
 def get_missing_kenngroessen(df_filtered: pd.DataFrame) -> dict:
     """Prüft welche erwarteten Kenngrößen in den Daten fehlen."""
     if 'Kenngröße' not in df_filtered.columns:
         return {ebene: kenn_list for ebene, kenn_list in EXPECTED_KENNGROESSEN.items()}
     
-    # Vorhandene Kenngrößen normalisieren
-    vorhandene = set(df_filtered['Kenngröße'].dropna().astype(str).str.strip().str.lower())
+    # Vorhandene Kenngrößen normalisieren (nutze dieselbe Funktion wie beim Mapping)
+    vorhandene = set(df_filtered['Kenngröße'].apply(normalize_kenngroesse))
     
     missing_per_ebene = {}
     for ebene, expected in EXPECTED_KENNGROESSEN.items():
         missing = []
         for k in expected:
-            if k.lower() not in vorhandene:
+            # Erwartete Keys ebenfalls normalisieren zum Vergleich
+            k_norm = normalize_kenngroesse(k)
+            if k_norm not in vorhandene:
                 missing.append(k)
         if missing:
             missing_per_ebene[ebene] = missing
@@ -479,6 +482,18 @@ def build_ebene_table(df_filtered: pd.DataFrame, ebene: str) -> pd.DataFrame:
 
     df_e['Wert'] = pd.to_numeric(df_e['Wert'], errors='coerce').fillna(0)
 
+    # -------------------------------------------------------------------------
+    # FIX: Vorzeichen umdrehen für Kosten/Abzüge (E2/E3), damit sie negativ angezeigt werden.
+    # Dies betrifft nur die Anzeige in dieser Tabelle ( build_ebene_table ).
+    # Die Berechnung der Totals erfolgt separat in compute_deckungsbeitraege (wo positiv erwartet wird).
+    # -------------------------------------------------------------------------
+    if ebene in ['E2', 'E3']:
+        # Wir invertieren alles in E2/E3, da das per Definition Abzugspositionen sind
+        # (außer E3 könnte theoretisch auch Erträge haben, aber laut Definition sind es Costs).
+        # Sicherstellen, dass wir nicht versehentlich Umsatz/TransferPrice invertieren, falls sie falsch zugeordnet sind.
+        # Aber da wir hier nach db['Ebene'] filtern, sollte das passen.
+        df_e['Wert'] = df_e['Wert'] * -1
+
     df_e['_KenngroesseNorm'] = df_e['Kenngröße'].astype(str).str.strip().str.lower()
 
     # SalesPrice und SalesAmount ausblenden (nicht-monetäre/technische Kennzahlen)
@@ -515,6 +530,9 @@ def build_ebene_table(df_filtered: pd.DataFrame, ebene: str) -> pd.DataFrame:
         rows.append(tmp)
 
     # Total-Zeile für die Ebene (alle Kenngrößen dieser Ebene)
+    # ACHTUNG: Da wire oben die Werte invertiert haben, ist die Summe hier auch negativ.
+    # Das ist okay, aber compute_deckungsbeitraege überschreibt die Total-Zeile später sowieso
+    # mit dem korrekt berechneten Deckungsbeitrag (netto).
     total_label = f"{ebene} Total"
     row_order.append(total_label)
     tmp_total = (
@@ -581,6 +599,7 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
     combined = combined.fillna(0)
 
     # Total-Zeilen mit berechneten Werten überschreiben
+    # -> Dies sind die Netto-Deckungsbeiträge aus compute_deckungsbeitraege (positive/echte Ergebnisse)
     if not db['e1_total'].empty:
         e1_idx = 'E1 | E1 Total'
         if e1_idx in combined.index:
@@ -696,6 +715,9 @@ try:
         st.stop()
 
     df = add_time_columns(df_raw)
+    
+    # FUTURE FILTER: Alle Buchungen in der Zukunft (relative zum aktuellen Tag) ausblenden
+    df = df[df['Monat_dt'] <= pd.Timestamp.now()]
 
     with st.sidebar:
         jahre = sorted(df['Jahr'].unique(), reverse=True)
