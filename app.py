@@ -364,7 +364,7 @@ def _pivot_for_kenngroesse(df_filtered: pd.DataFrame, kenngroesse_norm: str | li
 # Erwartete Kenngrößen pro Ebene (für Validierung)
 EXPECTED_KENNGROESSEN = {
     'E1': ['UmsatzEUR', 'TransferPriceEUR'],
-    'E2': ['DiscountAufMaterialEUR', 'DiscountAufMaterialKategorieEUR'],
+    'E2': [ 'DiscountAufMaterialKategorieEUR'],
     'E3': ['Commission', 'Additional Procurement Costs', 'Marketing Campaign', 'Monthly Rent', 'Monthly Salary', 'Monthly Social Costs'],
 }
 
