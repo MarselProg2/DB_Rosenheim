@@ -1,10 +1,18 @@
 import streamlit as st
-import pandas as pd
-import pymssql
-import re
-import os
-from pathlib import Path
-from dotenv import load_dotenv
+try:
+    import pandas as pd
+    import pymssql
+    import re
+    import os
+    from pathlib import Path
+    from dotenv import load_dotenv
+except ImportError as e:
+    st.error(f"⚠️ Installations-Fehler: {e}")
+    st.info("Tipp: Auf Streamlit Cloud fehlt eventuell 'packages.txt' mit 'freetds-dev'.")
+    st.stop()
+except Exception as e:
+    st.error(f"⚠️ Kritischer Fehler beim Import: {e}")
+    st.stop()
 
 # -----------------------------------------------------------------------------
 # 1. KONFIGURATION & VERBINDUNG
