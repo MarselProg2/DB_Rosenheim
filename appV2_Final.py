@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import pymssql
 import re
+import json
 
 # -----------------------------------------------------------------------------
 # 1. KONFIGURATION & VERBINDUNG
@@ -16,8 +17,143 @@ DB_CONFIG = {
 
 
 def load_store_names() -> list[str]:
-    """Gibt nur die erlaubten Stores zurück: Rosenheim und Freiburg im Breisgau."""
-    return ['Rosenheim', 'Freiburg im Breisgau']
+    """Lädt verfügbare Stores aus der DB (Fallback: Rosenheim/Freiburg)."""
+    fallback = ['Rosenheim', 'Freiburg im Breisgau']
+    try:
+        conn = pymssql.connect(
+            server=DB_CONFIG['server'],
+            database=DB_CONFIG['database'],
+            user=DB_CONFIG['user'],
+            password=DB_CONFIG['password'],
+        )
+        q = """
+SELECT DISTINCT [StoreName]
+FROM [list_views].[G14_Gesamt_DB_SCHEMA]
+WHERE [StoreName] IS NOT NULL
+ORDER BY [StoreName];
+"""
+        rows = pd.read_sql(q, conn)
+        conn.close()
+        if 'StoreName' not in rows.columns:
+            return fallback
+        stores = [str(x).strip() for x in rows['StoreName'].dropna().tolist() if str(x).strip()]
+        return stores or fallback
+    except Exception:
+        return fallback
+
+
+def load_users_from_json() -> list[dict]:
+    """Lädt Benutzer aus test.json (Fallback für Login/Rollen)."""
+    try:
+        with open('test.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return data
+    except Exception:
+        pass
+    return []
+
+
+def authenticate_user(username: str, password: str) -> tuple[bool, int | None]:
+    """Prüft Login gegen test.json und liefert SECURITYLEVEL zurück."""
+    u = str(username or '').strip().lower()
+    p = str(password or '').strip()
+    for row in load_users_from_json():
+        row_user = str(row.get('USERNAME', '')).strip().lower()
+        row_pass = str(row.get('USERPASS', '')).strip()
+        if row_user == u and row_pass == p:
+            try:
+                return True, int(row.get('SECURITYLEVEL'))
+            except Exception:
+                return True, None
+    return False, None
+
+
+def get_permission_level_number() -> int | None:
+    """Liest SECURITYLEVEL aus Session/Query-Parametern."""
+    for key in ('security_level', 'SECURITYLEVEL', 'permission_level', 'berechtigung', 'role', 'user_role'):
+        value = st.session_state.get(key)
+        if value not in (None, ''):
+            try:
+                return int(value)
+            except Exception:
+                pass
+
+    try:
+        params = st.query_params
+        for key in ('security_level', 'SECURITYLEVEL', 'permission_level', 'berechtigung', 'role', 'user_role'):
+            if key in params:
+                value = params.get(key)
+                if isinstance(value, list):
+                    value = value[0] if value else None
+                if value not in (None, ''):
+                    try:
+                        return int(value)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    return None
+
+
+def get_permission_level() -> str:
+    level = get_permission_level_number()
+    if level in (1, 2, 3):
+        return f'Fachkraft {level}'
+    return 'Unbekannt'
+
+
+def get_permission_rights(permission_level: str) -> list[str]:
+    """Liefert die sichtbaren Rechte je Fachkraft-Level."""
+    level = None
+    m = re.search(r"(\d+)", str(permission_level))
+    if m:
+        level = int(m.group(1))
+
+    rights_by_level = {
+        1: [
+            'Nur Store Rosenheim sichtbar.',
+            'Nur Jahresdaten (kein Quartal/Monat).',
+            'Lesender Zugriff auf Dashboard.',
+        ],
+        2: [
+            'Stores Rosenheim und Freiburg sichtbar.',
+            'Filter: Jahr und Quartal.',
+            'Monatsfilter nicht verfügbar.',
+        ],
+        3: [
+            'Alle verfügbaren Stores sichtbar.',
+            'Filter: Jahr, Quartal und Monat.',
+            'Voller Analysezugriff in der App.',
+        ],
+    }
+
+    return rights_by_level.get(level, ['Keine Rechtezuordnung gefunden.'])
+
+
+def get_allowed_stores(permission_level_number: int | None) -> list[str]:
+    """Store-Sichtbarkeit gemäß Handbuch."""
+    all_stores = load_store_names()
+    if permission_level_number == 1:
+        return [s for s in all_stores if s == 'Rosenheim']
+    if permission_level_number == 2:
+        allowed = {'Rosenheim', 'Freiburg im Breisgau'}
+        return [s for s in all_stores if s in allowed]
+    if permission_level_number == 3:
+        return all_stores
+    return ['Rosenheim']
+
+
+def get_permission_summary(permission_level_number: int | None) -> str:
+    """Kurztext für Berechtigungsanzeige in der Sidebar."""
+    if permission_level_number == 1:
+        return 'Basis-Zugriff (nur Jahr)'
+    if permission_level_number == 2:
+        return 'Erweiterter Zugriff (Jahr + Quartal)'
+    if permission_level_number == 3:
+        return 'Voller Zugriff (alle Filter)'
+    return 'Unbekannt'
 
 @st.cache_data(ttl=600)
 def load_final_table_from_db(store_name: str):
@@ -193,13 +329,28 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     """Berechnet DB-Logik spaltenweise (nicht zeilenweise).
 
     - E1 Total = UmsatzEUR + TransferPriceEUR
-    - E2 Total = E1 Total - Commission in EUR
-    - E3 Total = E2 Total - Summe(E3 Kosten)
+    - E2 Total = E1 Total - DiscountAufMaterialEUR - DiscountAufMaterialKategorieEUR
+    - E3 Total = E2 Total - Summe(E3 Kosten) - Commission in EUR
     """
     umsatz = _pivot_for_kenngroesse(df_filtered, ['UmsatzEUR', 'Umsatz EUR', 'umsatzeur'])
     transfer = _pivot_for_kenngroesse(df_filtered, ['TransferPriceEUR', 'Transfer Price EUR', 'transferpriceeur'])
-    # In manchen Quellen heißt das Feld nur "Commission" (ohne "in EUR").
     commission = _pivot_for_kenngroesse(df_filtered, ['Commission in EUR', 'Commission', 'commission in eur', 'commission'])
+    discount_material = _pivot_for_kenngroesse(
+        df_filtered,
+        [
+            'DiscountAufMaterialEUR',
+            'Discount Auf Material EUR',
+            'discountaufmaterialeur',
+        ]
+    )
+    discount_material_kategorie = _pivot_for_kenngroesse(
+        df_filtered,
+        [
+            'DiscountAufMaterialKategorieEUR',
+            'Discount Auf Material Kategorie EUR',
+            'discountaufmaterialkategorieeur',
+        ]
+    )
 
     e3_cost_norms = [
         'additional procurement costs',
@@ -217,7 +368,7 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
 
     # Gemeinsame Spaltenbasis
     all_cols = pd.Index([])
-    for p in [umsatz, transfer, commission] + e3_cost_parts:
+    for p in [umsatz, transfer, commission, discount_material, discount_material_kategorie] + e3_cost_parts:
         if not p.empty:
             all_cols = all_cols.union(p.columns)
     if len(all_cols) == 0:
@@ -225,12 +376,14 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
             'e1_total': pd.DataFrame(),
             'e2_total': pd.DataFrame(),
             'e3_total': pd.DataFrame(),
-            'missing': ['umsatzeur', 'transferpriceeur', 'commission in eur']
+            'missing': ['umsatzeur', 'transferpriceeur', 'commission in eur', 'discountaufmaterialkategorieeur']
         }
 
     umsatz_a = _align(umsatz, all_cols)
     transfer_a = _align(transfer, all_cols)
     commission_a = _align(commission, all_cols)
+    discount_material_a = _align(discount_material, all_cols)
+    discount_material_kategorie_a = _align(discount_material_kategorie, all_cols)
 
     e3_cost_a = pd.DataFrame(index=['_row'], columns=all_cols).fillna(0)
     for p in e3_cost_parts:
@@ -239,8 +392,12 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     # TransferPriceEUR ist in vielen Datenquellen bereits als negativer Wert hinterlegt.
     # Daher hier bewusst PLUS, um kein "Minus minus" zu erzeugen.
     e1_total = umsatz_a.add(transfer_a, fill_value=0)
-    e2_total = e1_total.sub(commission_a, fill_value=0)
-    e3_total = e2_total.sub(e3_cost_a, fill_value=0)
+    e2_total = (
+        e1_total
+        .sub(discount_material_a, fill_value=0)
+        .sub(discount_material_kategorie_a, fill_value=0)
+    )
+    e3_total = e2_total.sub(e3_cost_a, fill_value=0).sub(commission_a, fill_value=0)
 
     # Summen-Spalte sicherstellen (falls in all_cols nicht enthalten)
     if ('Summen', 'Gesamt') not in all_cols:
@@ -253,7 +410,9 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     if transfer.empty:
         missing.append('TransferPriceEUR')
     if commission.empty:
-        missing.append('Commission/Commission in EUR')
+        missing.append('Commission in EUR')
+    if discount_material_kategorie.empty:
+        missing.append('DiscountAufMaterialKategorieEUR')
 
     return {
         'e1_total': e1_total,
@@ -282,11 +441,18 @@ def build_ebene_table(df_filtered: pd.DataFrame, ebene: str) -> pd.DataFrame:
 
     df_e['Wert'] = pd.to_numeric(df_e['Wert'], errors='coerce').fillna(0)
 
-    df_e['_KenngroesseNorm'] = df_e['Kenngröße'].astype(str).str.strip().str.lower()
+    df_e['_KenngroesseNorm'] = df_e['Kenngröße'].apply(normalize_kenngroesse)
 
-    # Hinweis: Früher wurden nicht-monetäre/technische Kennzahlen (z.B. SalesPrice/SalesAmount)
-    # ausgeblendet. Für Freiburg führt das aber dazu, dass gefühlt „alles fehlt“, weil dort
-    # genau diese Kenngrößen häufig vorkommen. Daher hier bewusst keine Ausblendung.
+    # Technische Kennzahlen in der Ebenen-Tabelle ausblenden.
+    hidden_metrics = {
+        'salespriceeur',
+        'sales price eur',
+        'salesamount',
+        'sales amount',
+    }
+    df_e = df_e[~df_e['_KenngroesseNorm'].isin(hidden_metrics)]
+    if df_e.empty:
+        return pd.DataFrame()
 
     rows = []
     row_order: list[str] = []
@@ -391,9 +557,46 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
 st.set_page_config(page_title=" APPV211DB Rosenheim", layout="wide")
 st.title("Final Table – Kosten & Totals")
 
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+
+if not st.session_state.get('logged_in'):
+    st.subheader('Anmeldung')
+    with st.form('login_form', clear_on_submit=False):
+        login_user = st.text_input('Benutzername')
+        login_pass = st.text_input('Passwort', type='password')
+        submitted = st.form_submit_button('Anmelden')
+
+    if submitted:
+        ok, sec_level = authenticate_user(login_user, login_pass)
+        if ok:
+            st.session_state['logged_in'] = True
+            st.session_state['username'] = str(login_user).strip()
+            if sec_level is not None:
+                st.session_state['security_level'] = int(sec_level)
+            st.success('Anmeldung erfolgreich.')
+            st.rerun()
+        else:
+            st.error('Login fehlgeschlagen. Bitte Benutzername/Passwort prüfen.')
+    st.stop()
+
 with st.sidebar:
+    permission_level = get_permission_level()
+    permission_level_number = get_permission_level_number()
+    current_username = str(st.session_state.get('username', '')).strip() or 'Unbekannt'
+    role_label = f"Fachkraft Stufe {permission_level_number}" if permission_level_number in (1, 2, 3) else permission_level
+    st.markdown(
+        f"**Angemeldet als:** {role_label}"
+        + (f"  \nBenutzer: {current_username}" if current_username != 'Unbekannt' else "")
+    )
+    st.markdown(f"**Berechtigung:** {get_permission_summary(permission_level_number)}")
+    if st.button("Abmelden"):
+        for k in ('logged_in', 'username', 'security_level'):
+            if k in st.session_state:
+                del st.session_state[k]
+        st.rerun()
     st.header("Filter")
-    store_options = load_store_names()
+    store_options = get_allowed_stores(permission_level_number)
     default_index = 0
     if 'Rosenheim' in store_options:
         default_index = store_options.index('Rosenheim')
@@ -433,21 +636,25 @@ try:
         selected_jahr = st.selectbox("Jahr", jahre)
 
         df_jahr = df[df['Jahr'] == selected_jahr]
-        present_quarters = sorted(df_jahr['Monat_dt'].dt.quarter.dropna().unique().tolist())
-        quartal_options = ['Alle'] + [f"Q{q}" for q in present_quarters]
-        selected_quartal = st.selectbox("Quartal", quartal_options)
+        selected_quartal = 'Alle'
+        if permission_level_number in (2, 3):
+            present_quarters = sorted(df_jahr['Monat_dt'].dt.quarter.dropna().unique().tolist())
+            quartal_options = ['Alle'] + [f"Q{q}" for q in present_quarters]
+            selected_quartal = st.selectbox("Quartal", quartal_options)
 
         df_scope = df_jahr
         if selected_quartal != 'Alle':
             df_scope = df_scope[df_scope['Quartal'] == selected_quartal]
 
-        month_map = (
-            df_scope[['Monat', 'Monat_dt']]
-            .drop_duplicates()
-            .sort_values('Monat_dt', kind='stable')
-        )
-        monat_options = ['Alle'] + month_map['Monat'].astype(str).tolist()
-        selected_monat = st.selectbox("Monat", monat_options)
+        selected_monat = 'Alle'
+        if permission_level_number == 3:
+            month_map = (
+                df_scope[['Monat', 'Monat_dt']]
+                .drop_duplicates()
+                .sort_values('Monat_dt', kind='stable')
+            )
+            monat_options = ['Alle'] + month_map['Monat'].astype(str).tolist()
+            selected_monat = st.selectbox("Monat", monat_options)
 
     df_filtered = df[df['Jahr'] == selected_jahr].copy()
     if selected_quartal != 'Alle':
@@ -493,7 +700,7 @@ try:
 
     c0, c1, c2 = st.columns(3)
     c0.metric("Gesamtumsatz", format_eur(gesamtumsatz))
-    c1.metric("Summe Gesamt", format_eur(sum_total))
+    c1.metric("E3 Total Summe", format_eur(sum_total))
     c2.metric("Status", status_text)
 
     st.markdown("---")
@@ -515,6 +722,39 @@ try:
             return ['background-color: #f2f2f2; font-weight: bold; border-top: 1px solid #aaa; color: black;'] * len(row)
         return [''] * len(row)
 
+    def apply_display_signs(df_table: pd.DataFrame) -> pd.DataFrame:
+        """Steuert nur die Darstellung der Vorzeichen in der Ebenen-Tabelle.
+
+        - Kostenstellen immer mit Minus
+        - E1/E2/E3 (inkl. Total) mit rechnerischem Vorzeichen anzeigen
+        """
+        if df_table.empty:
+            return df_table
+
+        minus_rows = {
+            'discountaufmaterialeur',
+            'discountaufmaterialkategorieeur',
+            'additional procurement costs',
+            'commission',
+            'commission in eur',
+            'marketing campaign',
+            'monthly rent',
+            'monthly salary',
+            'monthly social costs',
+        }
+        out = df_table.copy()
+        for idx in out.index:
+            label = str(idx)
+            if '|' in label:
+                label = label.split('|', 1)[1].strip()
+            label_norm = normalize_kenngroesse(label)
+
+            row_vals = pd.to_numeric(out.loc[idx], errors='coerce').fillna(0)
+            if label_norm in minus_rows:
+                out.loc[idx] = -row_vals.abs().values
+
+        return out
+
     if 'Ebene' not in df_filtered.columns or 'EPos' not in df_filtered.columns:
         st.info("Hinweis: Ebenen-Auswertung (E1/E2/E3) ist für diese Datenquelle nicht verfügbar (Spalten Ebene/EPos fehlen).")
     else:
@@ -526,8 +766,9 @@ try:
             if df_all.empty:
                 st.info("Keine Detailanalyse-Daten für Ebenen.")
             else:
+                df_all_display = apply_display_signs(df_all)
                 st.dataframe(
-                    df_all.style
+                    df_all_display.style
                     .format(format_german)
                     .apply(style_total_rows, axis=1),
                     use_container_width=True,
@@ -543,6 +784,7 @@ try:
             'SalesAmount': 'Verkaufsmenge / Anzahl (Sales Amount).',
             'UmsatzEUR': 'Umsatz in EUR.',
             'TransferPriceEUR': 'Transferpreis / Einkaufspreis in EUR.',
+            'DiscountAufMaterialKategorieEUR': 'Rabatt auf Materialkategorie in EUR.',
             'Commission in EUR': 'Provision / Commission in EUR.',
             'Additional Procurement Costs': 'Zusätzliche Beschaffungskosten.',
             'Marketing Campaign': 'Marketing-Kampagne (Kosten).',
