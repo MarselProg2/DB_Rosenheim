@@ -1,0 +1,716 @@
+[
+  {
+    "ID_USER": 4700,
+    "USERNAME": "W25S201",
+    "USERPASS": "161805",
+    "SECURITYLEVEL": 4,
+    "GRUPPE_ID": 5
+  },
+  {
+    "ID_USER": 4701,
+    "USERNAME": "W25S202",
+    "USERPASS": "162610",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 4
+  },
+  {
+    "ID_USER": 4702,
+    "USERNAME": "W25S203",
+    "USERPASS": "163415",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 11
+  },
+  {
+    "ID_USER": 4703,
+    "USERNAME": "W25S204",
+    "USERPASS": "164220",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 17
+  },
+  {
+    "ID_USER": 4704,
+    "USERNAME": "W25S205",
+    "USERPASS": "165025",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 5
+  },
+  {
+    "ID_USER": 4705,
+    "USERNAME": "W25S206",
+    "USERPASS": "165830",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1
+  },
+  {
+    "ID_USER": 4706,
+    "USERNAME": "W25S207",
+    "USERPASS": "166635",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 3
+  },
+  {
+    "ID_USER": 4707,
+    "USERNAME": "W25S208",
+    "USERPASS": "167440",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 15
+  },
+  {
+    "ID_USER": 4708,
+    "USERNAME": "W25S209",
+    "USERPASS": "168245",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 17
+  },
+  {
+    "ID_USER": 4709,
+    "USERNAME": "W25S210",
+    "USERPASS": "169050",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 18
+  },
+  {
+    "ID_USER": 4710,
+    "USERNAME": "W25S211",
+    "USERPASS": "169855",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 2
+  },
+  {
+    "ID_USER": 4711,
+    "USERNAME": "W25S212",
+    "USERPASS": "170660",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 18
+  },
+  {
+    "ID_USER": 4712,
+    "USERNAME": "W25S213",
+    "USERPASS": "171465",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4713,
+    "USERNAME": "W25S214",
+    "USERPASS": "172270",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 12
+  },
+  {
+    "ID_USER": 4714,
+    "USERNAME": "W25S215",
+    "USERPASS": "173075",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4715,
+    "USERNAME": "W25S216",
+    "USERPASS": "173880",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 16
+  },
+  {
+    "ID_USER": 4716,
+    "USERNAME": "W25S217",
+    "USERPASS": "174685",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 2
+  },
+  {
+    "ID_USER": 4717,
+    "USERNAME": "W25S218",
+    "USERPASS": "175490",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4718,
+    "USERNAME": "W25S219",
+    "USERPASS": "176295",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 2
+  },
+  {
+    "ID_USER": 4719,
+    "USERNAME": "W25S220",
+    "USERPASS": "177100",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1
+  },
+  {
+    "ID_USER": 4720,
+    "USERNAME": "W25S221",
+    "USERPASS": "177905",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 4
+  },
+  {
+    "ID_USER": 4721,
+    "USERNAME": "W25S222",
+    "USERPASS": "178710",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 7
+  },
+  {
+    "ID_USER": 4722,
+    "USERNAME": "W25S223",
+    "USERPASS": "179515",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4723,
+    "USERNAME": "W25S224",
+    "USERPASS": "180320",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4724,
+    "USERNAME": "W25S225",
+    "USERPASS": "181125",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 16
+  },
+  {
+    "ID_USER": 4725,
+    "USERNAME": "W25S226",
+    "USERPASS": "181930",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 3
+  },
+  {
+    "ID_USER": 4726,
+    "USERNAME": "W25S227",
+    "USERPASS": "182735",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 17
+  },
+  {
+    "ID_USER": 4727,
+    "USERNAME": "W25S228",
+    "USERPASS": "183540",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 18
+  },
+  {
+    "ID_USER": 4728,
+    "USERNAME": "W25S229",
+    "USERPASS": "184345",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 5
+  },
+  {
+    "ID_USER": 4729,
+    "USERNAME": "W25S230",
+    "USERPASS": "185150",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 16
+  },
+  {
+    "ID_USER": 4730,
+    "USERNAME": "W25S231",
+    "USERPASS": "185955",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 4
+  },
+  {
+    "ID_USER": 4731,
+    "USERNAME": "W25S232",
+    "USERPASS": "186760",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 15
+  },
+  {
+    "ID_USER": 4732,
+    "USERNAME": "W25S233",
+    "USERPASS": "187565",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 11
+  },
+  {
+    "ID_USER": 4733,
+    "USERNAME": "W25S234",
+    "USERPASS": "188370",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 8
+  },
+  {
+    "ID_USER": 4734,
+    "USERNAME": "W25S235",
+    "USERPASS": "189175",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 6
+  },
+  {
+    "ID_USER": 4735,
+    "USERNAME": "W25S236",
+    "USERPASS": "189980",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 3
+  },
+  {
+    "ID_USER": 4736,
+    "USERNAME": "W25S237",
+    "USERPASS": "190785",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 11
+  },
+  {
+    "ID_USER": 4737,
+    "USERNAME": "W25S238",
+    "USERPASS": "191590",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 12
+  },
+  {
+    "ID_USER": 4738,
+    "USERNAME": "W25S239",
+    "USERPASS": "192395",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1
+  },
+  {
+    "ID_USER": 4739,
+    "USERNAME": "W25S240",
+    "USERPASS": "193200",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 13
+  },
+  {
+    "ID_USER": 4740,
+    "USERNAME": "W25S241",
+    "USERPASS": "194005",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 6
+  },
+  {
+    "ID_USER": 4741,
+    "USERNAME": "W25S242",
+    "USERPASS": "194810",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 6
+  },
+  {
+    "ID_USER": 4742,
+    "USERNAME": "W25S243",
+    "USERPASS": "195615",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 13
+  },
+  {
+    "ID_USER": 4743,
+    "USERNAME": "W25S244",
+    "USERPASS": "196420",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4744,
+    "USERNAME": "W25S245",
+    "USERPASS": "197225",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 9
+  },
+  {
+    "ID_USER": 4745,
+    "USERNAME": "W25S246",
+    "USERPASS": "198030",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 9
+  },
+  {
+    "ID_USER": 4746,
+    "USERNAME": "W25S247",
+    "USERPASS": "198835",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 15
+  },
+  {
+    "ID_USER": 4747,
+    "USERNAME": "W25S248",
+    "USERPASS": "199640",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4748,
+    "USERNAME": "W25S249",
+    "USERPASS": "200445",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4749,
+    "USERNAME": "W25S250",
+    "USERPASS": "201250",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 8
+  },
+  {
+    "ID_USER": 4750,
+    "USERNAME": "W25S251",
+    "USERPASS": "202055",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 14
+  },
+  {
+    "ID_USER": 4751,
+    "USERNAME": "W25S252",
+    "USERPASS": "202860",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4752,
+    "USERNAME": "W25S253",
+    "USERPASS": "203665",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4753,
+    "USERNAME": "W25S254",
+    "USERPASS": "204470",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 8
+  },
+  {
+    "ID_USER": 4754,
+    "USERNAME": "W25S255",
+    "USERPASS": "205275",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4755,
+    "USERNAME": "W25S256",
+    "USERPASS": "206080",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4756,
+    "USERNAME": "W25S257",
+    "USERPASS": "206885",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4757,
+    "USERNAME": "W25S258",
+    "USERPASS": "207690",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4758,
+    "USERNAME": "W25S259",
+    "USERPASS": "208495",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4759,
+    "USERNAME": "W25S260",
+    "USERPASS": "209300",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4760,
+    "USERNAME": "W25S261",
+    "USERPASS": "210105",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4761,
+    "USERNAME": "W25S262",
+    "USERPASS": "210910",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4762,
+    "USERNAME": "W25S263",
+    "USERPASS": "211715",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4763,
+    "USERNAME": "W25S264",
+    "USERPASS": "212520",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4764,
+    "USERNAME": "W25S265",
+    "USERPASS": "213325",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4765,
+    "USERNAME": "W25S266",
+    "USERPASS": "214130",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4766,
+    "USERNAME": "W25S267",
+    "USERPASS": "214935",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4767,
+    "USERNAME": "W25S268",
+    "USERPASS": "215740",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4768,
+    "USERNAME": "W25S269",
+    "USERPASS": "216545",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4769,
+    "USERNAME": "W25S270",
+    "USERPASS": "217350",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4770,
+    "USERNAME": "W25S271",
+    "USERPASS": "218155",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4771,
+    "USERNAME": "W25S272",
+    "USERPASS": "218960",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4772,
+    "USERNAME": "W25S273",
+    "USERPASS": "219765",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4773,
+    "USERNAME": "W25S274",
+    "USERPASS": "220570",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4774,
+    "USERNAME": "W25S275",
+    "USERPASS": "221375",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4775,
+    "USERNAME": "W25S276",
+    "USERPASS": "222180",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4776,
+    "USERNAME": "W25S277",
+    "USERPASS": "222985",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4777,
+    "USERNAME": "W25S278",
+    "USERPASS": "223790",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4778,
+    "USERNAME": "W25S279",
+    "USERPASS": "224595",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4779,
+    "USERNAME": "W25S280",
+    "USERPASS": "225400",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4780,
+    "USERNAME": "W25S281",
+    "USERPASS": "226205",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4781,
+    "USERNAME": "W25S282",
+    "USERPASS": "227010",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4782,
+    "USERNAME": "W25S283",
+    "USERPASS": "227815",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4783,
+    "USERNAME": "W25S284",
+    "USERPASS": "228620",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4784,
+    "USERNAME": "W25S285",
+    "USERPASS": "229425",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4785,
+    "USERNAME": "W25S286",
+    "USERPASS": "230230",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4786,
+    "USERNAME": "W25S287",
+    "USERPASS": "231035",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4787,
+    "USERNAME": "W25S288",
+    "USERPASS": "231840",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4788,
+    "USERNAME": "W25S289",
+    "USERPASS": "232645",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4789,
+    "USERNAME": "W25S290",
+    "USERPASS": "233450",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4790,
+    "USERNAME": "W25S291",
+    "USERPASS": "234255",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4791,
+    "USERNAME": "W25S292",
+    "USERPASS": "235060",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4792,
+    "USERNAME": "W25S293",
+    "USERPASS": "235865",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4793,
+    "USERNAME": "W25S294",
+    "USERPASS": "236670",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4794,
+    "USERNAME": "W25S295",
+    "USERPASS": "237475",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4795,
+    "USERNAME": "W25S296",
+    "USERPASS": "238280",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4796,
+    "USERNAME": "W25S297",
+    "USERPASS": "239085",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4797,
+    "USERNAME": "W25S298",
+    "USERPASS": "239890",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 4798,
+    "USERNAME": "W25S299",
+    "USERPASS": "240695",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 5701,
+    "USERNAME": "fachk1",
+    "USERPASS": "fachk1",
+    "SECURITYLEVEL": 1,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 5702,
+    "USERNAME": "fachk2",
+    "USERPASS": "fachk2",
+    "SECURITYLEVEL": 2,
+    "GRUPPE_ID": 1002
+  },
+  {
+    "ID_USER": 5703,
+    "USERNAME": "fachk3",
+    "USERPASS": "fachk3",
+    "SECURITYLEVEL": 3,
+    "GRUPPE_ID": 1002
+  }
+]

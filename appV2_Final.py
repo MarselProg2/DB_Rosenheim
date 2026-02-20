@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import pymssql
 import re
-import json
 
 # -----------------------------------------------------------------------------
 # 1. KONFIGURATION & VERBINDUNG
@@ -42,30 +41,42 @@ ORDER BY [StoreName];
         return fallback
 
 
-def load_users_from_json() -> list[dict]:
-    """Lädt Benutzer aus test.json (Fallback für Login/Rollen)."""
-    try:
-        with open('test.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            return data
-    except Exception:
-        pass
-    return []
-
-
 def authenticate_user(username: str, password: str) -> tuple[bool, int | None]:
-    """Prüft Login gegen test.json und liefert SECURITYLEVEL zurück."""
+    """Prüft Login gegen ERPDEV.dbo.LOV_USER_LOGINS und liefert SECURITYLEVEL zurück."""
     u = str(username or '').strip().lower()
     p = str(password or '').strip()
-    for row in load_users_from_json():
-        row_user = str(row.get('USERNAME', '')).strip().lower()
-        row_pass = str(row.get('USERPASS', '')).strip()
-        if row_user == u and row_pass == p:
-            try:
-                return True, int(row.get('SECURITYLEVEL'))
-            except Exception:
-                return True, None
+    if not u or not p:
+        return False, None
+
+    try:
+        conn = pymssql.connect(
+            server=DB_CONFIG['server'],
+            database=DB_CONFIG['database'],
+            user=DB_CONFIG['user'],
+            password=DB_CONFIG['password'],
+        )
+        cursor = conn.cursor(as_dict=True)
+        cursor.execute(
+            """
+SELECT TOP (1) [SECURITYLEVEL]
+FROM [dbo].[LOV_USER_LOGINS]
+WHERE LOWER(LTRIM(RTRIM([USERNAME]))) = %s
+  AND LTRIM(RTRIM([USERPASS])) = %s;
+""",
+            (u, p),
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return False, None
+        try:
+            return True, int(row.get('SECURITYLEVEL'))
+        except Exception:
+            return True, None
+    except Exception:
+        return False, None
+
     return False, None
 
 
