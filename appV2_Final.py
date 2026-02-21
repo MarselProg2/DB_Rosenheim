@@ -27,7 +27,7 @@ def load_store_names() -> list[str]:
         )
         q = """
 SELECT DISTINCT [StoreName]
-FROM [list_views].[G14_Gesamt_DB_SCHEMA]
+    FROM [list_views].[G14_Gesamt_DB_SCHEMA_FINAL]
 WHERE [StoreName] IS NOT NULL
 ORDER BY [StoreName];
 """
@@ -177,8 +177,8 @@ def load_final_table_from_db(store_name: str):
 
     store = (store_name or "").strip()
 
-    # Alle Stores (inkl. Freiburg im Breisgau, Rosenheim, etc.) aus derselben G14-View laden
-    g14_view = '[list_views].[G14_Gesamt_DB_SCHEMA]'
+    # Alle Stores (inkl. Freiburg im Breisgau, Rosenheim, etc.) aus der G14-Final-View laden
+    g14_view = '[list_views].[G14_Gesamt_DB_SCHEMA_FINAL]'
 
     query = f"""
 SELECT *
@@ -403,12 +403,16 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
     # TransferPriceEUR ist in vielen Datenquellen bereits als negativer Wert hinterlegt.
     # Daher hier bewusst PLUS, um kein "Minus minus" zu erzeugen.
     e1_total = umsatz_a.add(transfer_a, fill_value=0)
+    # Discounts sollen E2 immer reduzieren – unabhängig davon,
+    # ob die Datenquelle Discounts als negativ oder positiv liefert.
     e2_total = (
         e1_total
-        .sub(discount_material_a, fill_value=0)
-        .sub(discount_material_kategorie_a, fill_value=0)
+        .sub(discount_material_a.abs(), fill_value=0)
+        .sub(discount_material_kategorie_a.abs(), fill_value=0)
     )
-    e3_total = e2_total.sub(e3_cost_a, fill_value=0).sub(commission_a, fill_value=0)
+    # E3-Kosten/Provision sollen E3 immer reduzieren – unabhängig davon,
+    # ob die Datenquelle Kosten als negativ oder positiv liefert.
+    e3_total = e2_total.sub(e3_cost_a.abs(), fill_value=0).sub(commission_a.abs(), fill_value=0)
 
     # Summen-Spalte sicherstellen (falls in all_cols nicht enthalten)
     if ('Summen', 'Gesamt') not in all_cols:
@@ -642,6 +646,7 @@ try:
 
     df = add_time_columns(df_raw)
 
+    selected_monat_dt = None
     with st.sidebar:
         jahre = sorted(df['Jahr'].unique(), reverse=True)
         selected_jahr = st.selectbox("Jahr", jahre)
@@ -664,14 +669,22 @@ try:
                 .drop_duplicates()
                 .sort_values('Monat_dt', kind='stable')
             )
-            monat_options = ['Alle'] + month_map['Monat'].astype(str).tolist()
+            month_map = month_map.copy()
+            month_map['MonatLabel'] = month_map['Monat'].astype(str)
+            month_lookup = dict(zip(month_map['MonatLabel'], month_map['Monat_dt']))
+            monat_options = ['Alle'] + month_map['MonatLabel'].tolist()
             selected_monat = st.selectbox("Monat", monat_options)
+            if selected_monat != 'Alle':
+                selected_monat_dt = month_lookup.get(selected_monat)
 
     df_filtered = df[df['Jahr'] == selected_jahr].copy()
     if selected_quartal != 'Alle':
         df_filtered = df_filtered[df_filtered['Quartal'] == selected_quartal]
     if selected_monat != 'Alle':
-        df_filtered = df_filtered[df_filtered['Monat'] == selected_monat]
+        if selected_monat_dt is not None:
+            df_filtered = df_filtered[df_filtered['Monat_dt'] == selected_monat_dt]
+        else:
+            df_filtered = df_filtered[df_filtered['Monat'].astype(str) == selected_monat]
 
     if df_filtered.empty:
         st.info("Für den ausgewählten Zeitraum gibt es keine Daten.")
