@@ -428,6 +428,8 @@ def compute_deckungsbeitraege(df_filtered: pd.DataFrame) -> dict:
         missing.append('Commission in EUR')
     if discount_material_kategorie.empty:
         missing.append('DiscountAufMaterialKategorieEUR')
+    if discount_material_kategorie.empty:
+        missing.append('DiscountAufMaterialKategorieEUR')
 
     return {
         'e1_total': e1_total,
@@ -569,6 +571,44 @@ def build_all_ebenen_table(df_filtered: pd.DataFrame, ebenen: list[str]) -> pd.D
     return combined
 
 
+def get_missing_required_positions(df_filtered: pd.DataFrame) -> list[str]:
+    """Prüft, welche Pflicht-Positionen in E1/E2/E3 fehlen.
+
+    Ausgabeformat pro Eintrag: "E1 | UmsatzEUR"
+    """
+    if df_filtered.empty or 'Ebene' not in df_filtered.columns or 'Kenngröße' not in df_filtered.columns:
+        return []
+
+    required_items: list[tuple[str, str, set[str]]] = [
+        ('E1', 'UmsatzEUR', {'umsatzeur', 'umsatz eur'}),
+        ('E1', 'TransferPriceEUR', {'transferpriceeur', 'transfer price eur'}),
+        ('E2', 'DiscountAufMaterialEUR', {'discountaufmaterialeur', 'discount auf material eur'}),
+        (
+            'E2',
+            'DiscountAufMaterialKategorieEUR',
+            {'discountaufmaterialkategorieeur', 'discount auf material kategorie eur'},
+        ),
+        ('E3', 'Additional Procurement Costs', {'additional procurement costs'}),
+        ('E3', 'Commission', {'commission', 'commission in eur'}),
+        ('E3', 'Marketing Campaign', {'marketing campaign'}),
+        ('E3', 'Monthly Rent', {'monthly rent'}),
+        ('E3', 'Monthly Salary', {'monthly salary'}),
+        ('E3', 'Monthly Social Costs', {'monthly social costs'}),
+    ]
+
+    tmp = df_filtered[['Ebene', 'Kenngröße']].copy()
+    tmp['Ebene'] = tmp['Ebene'].astype(str).str.strip()
+    tmp['_KenngroesseNorm'] = tmp['Kenngröße'].apply(normalize_kenngroesse)
+
+    missing: list[str] = []
+    for ebene, display_name, targets in required_items:
+        present = not tmp[(tmp['Ebene'] == ebene) & (tmp['_KenngroesseNorm'].isin(targets))].empty
+        if not present:
+            missing.append(f"{ebene} | {display_name}")
+
+    return missing
+
+
 st.set_page_config(page_title=" APPV211DB Rosenheim", layout="wide")
 st.title("Final Table – Kosten & Totals")
 
@@ -699,17 +739,18 @@ try:
 
     st.subheader(f"Übersicht: {store_name} – {zeitraum_titel}")
 
+    missing_required_positions = get_missing_required_positions(df_filtered)
+    if missing_required_positions:
+        st.error(
+            "Fehlende Positionen in der DB-Rechnung:\n- "
+            + "\n- ".join(missing_required_positions)
+        )
+
     # Deckungsbeiträge (spaltenweise, über alle Produkte/Linien/Kategorien)
     db = compute_deckungsbeitraege(df_filtered)
     sum_total = 0.0
     if not db['e3_total'].empty and ('Summen', 'Gesamt') in db['e3_total'].columns:
         sum_total = float(db['e3_total'].iloc[0][('Summen', 'Gesamt')])
-
-    if db.get('missing'):
-        st.info(
-            "Hinweis: Für die Deckungsbeitrags-Rechnung fehlen Kenngrößen: "
-            + ", ".join(db['missing'])
-        )
 
     profitabel = sum_total > 0
     status_text = "✅ Profitabel" if profitabel else "❌ Nicht profitabel"
@@ -779,9 +820,7 @@ try:
 
         return out
 
-    if 'Ebene' not in df_filtered.columns or 'EPos' not in df_filtered.columns:
-        st.info("Hinweis: Ebenen-Auswertung (E1/E2/E3) ist für diese Datenquelle nicht verfügbar (Spalten Ebene/EPos fehlen).")
-    else:
+    if 'Ebene' in df_filtered.columns and 'EPos' in df_filtered.columns:
         present_ebenen = [e for e in ['E1', 'E2', 'E3'] if e in set(df_filtered['Ebene'].dropna().astype(str))]
         if not present_ebenen:
             st.info("Keine Ebenen (E1/E2/E3) in den Daten gefunden.")
