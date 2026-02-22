@@ -616,10 +616,10 @@ with st.sidebar:
     if 'Rosenheim' in store_options:
         default_index = store_options.index('Rosenheim')
     store_name = st.selectbox("StoreName", store_options, index=default_index)
-    if st.button("🔄 Daten aktualisieren"):
-        load_final_table_from_db.clear()
-        load_store_names.clear()
-        st.rerun()
+    # if st.button("🔄 Daten aktualisieren"):
+    #     load_final_table_from_db.clear()
+    #     load_store_names.clear()
+    #     st.rerun()
 
 
 try:
